@@ -1,6 +1,6 @@
 # Spor Rutini — takip uygulaması (1. aşama)
 
-Telefonda çalışan, internet olmadan da açılan bir web uygulaması (PWA). Antrenmanları set set kaydeder, kilo/bel/uyku/protein takibi yapar, kural tabanlı uyarılar ve öneriler verir. **Veriler yalnızca cihazda saklanır**; yapay zekâ kullanılmaz (3. aşamada isteğe bağlı olarak eklenecek).
+Telefonda ve bilgisayarda çalışan, internet olmadan da açılan bir web uygulaması (PWA). Antrenmanları set set kaydeder, kilo/bel/uyku/protein takibi yapar, kural tabanlı uyarılar ve öneriler verir. **Veriler cihazda saklanır**; isteğe bağlı olarak Supabase ile cihazlar arasında eşitlenir. Yapay zekâ asistanı isteğe bağlıdır ve kopyala-yapıştır ile çalışır (veri otomatik gönderilmez).
 
 Plan ve gereksinimler: [spor-rutini-plani.md](spor-rutini-plani.md) · [uygulama-gereksinimleri.md](uygulama-gereksinimleri.md)
 
