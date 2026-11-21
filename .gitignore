@@ -1,0 +1,5 @@
+# Kişisel bilgiler içeren plan dosyası yayınlanmaz
+spor-rutini-plani.md
+.claude/
+node_modules/
+*.log
