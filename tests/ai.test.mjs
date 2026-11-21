@@ -41,6 +41,39 @@ test('yapay zekâ cevabındaki program okunur ve uygulanır', () => {
   assert.equal(programFor({ ...settings, phase: 'dumbbell' }), PROGRAMS.dumbbell);
 });
 
+test('yapay zekânın sık yaptığı biçim farkları kabul edilir', () => {
+  const messy = `İşte program:
+\`\`\`json
+{
+  // yorum
+  "program": {
+    "phase": "band",
+    "A": [
+      {"name": "Bantlı squat", "sets": "3", "reps": "10-15"},
+      {"exercise": "band_row", "sets": 3, "reps": "12–15",},
+      {"ex": "plank", "sets": 3, "min": 45, "max": 30},
+    ],
+    "B": [{"id": "reverse_lunge", "sets": 3, "min": 8, "max": 12}]
+  }
+}
+\`\`\``;
+  const p = parseProgram(messy.replace('"Bantlı squat"', '“Bantlı squat”'));
+  assert.equal(p.phase, 'band');
+  assert.deepEqual(p.A[0], { ex: 'band_squat', sets: 3, min: 10, max: 15 });
+  assert.deepEqual(p.A[1], { ex: 'band_row', sets: 3, min: 12, max: 15 });
+  assert.deepEqual(p.A[2], { ex: 'plank', sets: 3, min: 30, max: 45 });
+  assert.equal(p.B[0].ex, 'reverse_lunge');
+  const d = parseProgram('```json\n{"days":{"A":[{"ex":"squat","sets":3,"min":12,"max":15}],"B":[{"ex":"superman","sets":3,"min":10,"max":12}]}}\n```');
+  assert.equal(d.A[0].ex, 'squat');
+});
+
+test('program isteğinde mevcut program örnek olarak var', () => {
+  const p = buildPrompt('program', { state, today: '2026-11-22', startKey: '2026-11-02' });
+  assert.ok(p.includes('"ex":"band_squat"'));
+  const block = p.split('```json').pop().split('```')[0];
+  assert.ok(parseProgram('```json' + block + '```').A.length > 0, 'örnek JSON geçerli olmalı');
+});
+
 test('hatalı program reddedilir', () => {
   assert.throws(() => parseProgram('merhaba'), /bulunamadı/);
   assert.throws(() => parseProgram('```json\n{"A":[{"ex":"zipla","sets":3,"min":5,"max":10}],"B":[{"ex":"plank","sets":3,"min":5,"max":10}]}\n```'), /uygulamada yok/);

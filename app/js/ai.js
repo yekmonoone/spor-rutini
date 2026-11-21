@@ -110,13 +110,16 @@ export function buildPrompt(kind, { state, today, startKey, alerts = [], questio
     review: 'Görev: Son haftalarımı değerlendir. 1) Neler iyi gidiyor, 2) en önemli 2–3 sorun, 3) önümüzdeki hafta için 3 somut öneri (antrenman, beslenme, uyku). Kalori hedefimi değiştirmem gerekiyorsa gerekçesiyle söyle.',
     program: [
       'Görev: Verilerime göre önümüzdeki 4 haftalık blok için Gün A ve Gün B programını öner. Önce kısa gerekçeni yaz.',
-      'Sonra programı uygulamaya aktarabilmem için TAM OLARAK şu biçimde tek bir ```json kod bloğu ver:',
-      '```json',
-      '{"phase": "bodyweight|band|dumbbell", "note": "kısa açıklama", "A": [{"ex": "hareket_id", "sets": 3, "min": 8, "max": 12}], "B": [...]}',
-      '```',
-      `- "ex" yalnızca şu kimliklerden biri olabilir: ${allowedExerciseList()}`,
-      '- Her gün 4–9 hareket; sets 1–5; min ≤ max; süreli hareketlerde min/max saniyedir. Padel hazırlık hareketlerine "prep": true ekleyebilirsin.',
+      'Sonra programı uygulamaya aktarabilmem için en sonda TEK bir ```json kod bloğu ver. Kurallar:',
+      '- Yalnızca geçerli JSON: çift tırnak, yorum yok, sondaki virgül yok, "..." gibi kısaltma yok.',
+      '- Alanlar: "phase", "note", "A", "B". A ve B listelerindeki her öğe: "ex" (kimlik), "sets" (sayı), "min" (sayı), "max" (sayı), isteğe bağlı "prep": true.',
+      `- "ex" yalnızca şu kimliklerden biri olabilir (adını değil kimliğini yaz): ${allowedExerciseList()}`,
+      '- Her gün 4–9 hareket; sets 1–5; min ≤ max; süreli hareketlerde min/max saniyedir.',
       `- Şu anki dönem "${state.settings.phase}"; ekipmanım değişmediyse aynı dönemi kullan.`,
+      'Şu anki programım bu biçimde (örnek olarak kullan, değiştirerek ver):',
+      '```json',
+      JSON.stringify({ phase: state.settings.phase, note: 'kısa açıklama', ...(() => { const p = programFor(state.settings); return { A: p.A.map(({ ex, sets, min, max, prep }) => ({ ex, sets, min, max, ...(prep ? { prep } : {}) })), B: p.B.map(({ ex, sets, min, max, prep }) => ({ ex, sets, min, max, ...(prep ? { prep } : {}) })) }; })() }),
+      '```',
     ].join('\n'),
     question: `Sorum: ${question.trim() || '(buraya sorunu yaz)'}`,
   }[kind];
@@ -147,33 +150,92 @@ export function buildPrompt(kind, { state, today, startKey, alerts = [], questio
 /** Yapay zekânın cevabındaki JSON programı okur ve doğrular. Hata varsa Türkçe mesajla fırlatır. */
 export function parseProgram(text) {
   const s = String(text ?? '');
-  const fenced = s.match(/```(?:json)?\s*([\s\S]*?)```/i);
-  let body = fenced ? fenced[1] : null;
-  if (!body) {
-    const a = s.indexOf('{');
-    const b = s.lastIndexOf('}');
-    if (a >= 0 && b > a) body = s.slice(a, b + 1);
+  // Aday metinler: tüm kod blokları, sonra ilk { ile son } arası.
+  const candidates = [...s.matchAll(/```[a-zA-Z]*\s*([\s\S]*?)```/g)].map((m) => m[1]);
+  const a = s.indexOf('{');
+  const b = s.lastIndexOf('}');
+  if (a >= 0 && b > a) candidates.push(s.slice(a, b + 1));
+  if (!candidates.length) throw new Error('Metinde program bulunamadı. Cevaptaki ```json bloğunun tamamını yapıştır.');
+
+  let obj = null;
+  for (const c of candidates) {
+    obj = tryJson(c);
+    if (obj && typeof obj === 'object') break;
   }
-  if (!body) throw new Error('Metinde program bulunamadı. Cevaptaki ```json bloğunun tamamını yapıştır.');
-  let obj;
-  try { obj = JSON.parse(body); } catch { throw new Error('Program okunamadı: JSON bozuk. Yapay zekâdan aynı biçimde tekrar vermesini iste.'); }
-  if (obj.phase != null && !PHASES[obj.phase]) throw new Error(`Bilinmeyen dönem: "${obj.phase}".`);
-  const day = (list, name) => {
-    if (!Array.isArray(list) || list.length < 1 || list.length > 12) throw new Error(`Gün ${name}: 1–12 hareket olmalı.`);
-    return list.map((it, i) => {
-      if (!it || !EX[it.ex]) throw new Error(`Gün ${name}, ${i + 1}. hareket: "${it?.ex}" uygulamada yok.`);
-      const sets = Number(it.sets);
-      const min = Number(it.min);
-      const max = Number(it.max ?? it.min);
-      if (!Number.isInteger(sets) || sets < 1 || sets > 5) throw new Error(`Gün ${name}, ${EX[it.ex].name}: set sayısı 1–5 olmalı.`);
-      if (!Number.isInteger(min) || !Number.isInteger(max) || min < 1 || max > 120 || min > max) throw new Error(`Gün ${name}, ${EX[it.ex].name}: tekrar aralığı hatalı.`);
-      return { ex: it.ex, sets, min, max, ...(it.prep ? { prep: true } : {}) };
-    });
-  };
-  return {
-    phase: obj.phase ?? null,
-    note: typeof obj.note === 'string' ? obj.note.slice(0, 500) : '',
-    A: day(obj.A, 'A'),
-    B: day(obj.B, 'B'),
-  };
+  if (!obj) throw new Error('Program okunamadı: JSON bozuk. Yapay zekâya "Programı yalnızca geçerli JSON olarak, tek bir ```json bloğunda tekrar ver" yaz.');
+  obj = unwrap(obj);
+
+  const phase = obj.phase ?? obj.donem ?? obj['dönem'] ?? null;
+  if (phase != null && !PHASES[phase]) throw new Error(`Bilinmeyen dönem: "${phase}". bodyweight, band ya da dumbbell olmalı.`);
+  const A = pickDay(obj, 'A');
+  const B = pickDay(obj, 'B');
+  if (!A || !B) throw new Error('Programda Gün A ve Gün B listeleri bulunamadı ("A": [...], "B": [...]).');
+  const note = obj.note ?? obj.not ?? obj['açıklama'] ?? '';
+  return { phase, note: typeof note === 'string' ? note.slice(0, 500) : '', A: parseDay(A, 'A'), B: parseDay(B, 'B') };
+}
+
+/** JSON'u dener; olmazsa akıllı tırnak, yorum ve sondaki virgülleri temizleyip tekrar dener. */
+function tryJson(text) {
+  try { return JSON.parse(text); } catch { /* temizle */ }
+  const cleaned = text
+    .replace(/[“”„″]/g, '"')
+    .replace(/[‘’]/g, "'")
+    .replace(/\/\*[\s\S]*?\*\//g, '')
+    .replace(/(^|[^:"'])\/\/.*$/gm, '$1')
+    .replace(/,\s*([}\]])/g, '$1');
+  try { return JSON.parse(cleaned); } catch { return null; }
+}
+
+function unwrap(obj) {
+  for (const k of ['program', 'plan', 'block', 'blok']) {
+    if (obj[k] && typeof obj[k] === 'object' && !Array.isArray(obj[k])) return { ...obj[k], note: obj[k].note ?? obj.note, phase: obj[k].phase ?? obj.phase };
+  }
+  return obj;
+}
+
+function pickDay(obj, d) {
+  const keys = [d, d.toLowerCase(), `day${d}`, `day_${d}`, `gun${d}`, `gün${d}`, `Gün ${d}`, `gun_${d}`, `Day ${d}`];
+  for (const k of keys) if (Array.isArray(obj[k])) return obj[k];
+  const days = obj.days ?? obj.gunler ?? obj['günler'];
+  if (days && Array.isArray(days[d] ?? days[d.toLowerCase()])) return days[d] ?? days[d.toLowerCase()];
+  return null;
+}
+
+const norm = (t) => String(t ?? '').toLocaleLowerCase('tr-TR').replace(/[^a-z0-9çğıöşü]+/g, ' ').trim();
+
+/** Kimlik ya da adla hareketi bulur ("band_squat", "Bantlı squat", "bantli squat"). */
+function findExercise(it) {
+  const raw = it.ex ?? it.id ?? it.exercise ?? it.hareket ?? it.name ?? it.ad;
+  if (raw && EX[raw]) return raw;
+  const key = String(raw ?? '').trim().toLowerCase().replace(/[\s-]+/g, '_');
+  if (EX[key]) return key;
+  const n = norm(raw);
+  const ascii = (t) => t.replace(/ç/g, 'c').replace(/ğ/g, 'g').replace(/ı/g, 'i').replace(/ö/g, 'o').replace(/ş/g, 's').replace(/ü/g, 'u');
+  for (const [id, e] of Object.entries(EX)) {
+    const en = norm(e.name);
+    if (en === n || ascii(en) === ascii(n) || norm(e.name.split('(')[0]) === n) return id;
+  }
+  return null;
+}
+
+function parseDay(list, name) {
+  if (list.length < 1 || list.length > 12) throw new Error(`Gün ${name}: 1–12 hareket olmalı.`);
+  return list.map((it, i) => {
+    const id = it && typeof it === 'object' ? findExercise(it) : null;
+    if (!id) throw new Error(`Gün ${name}, ${i + 1}. hareket: "${it?.ex ?? it?.name ?? it}" uygulamada yok.`);
+    let min = it.min;
+    let max = it.max;
+    const reps = it.reps ?? it.tekrar ?? it.range;
+    if ((min == null || max == null) && reps != null) {
+      const m = String(reps).match(/(\d+)\s*(?:[-–—]|to|ile)?\s*(\d+)?/);
+      if (m) { min = min ?? m[1]; max = max ?? m[2] ?? m[1]; }
+    }
+    let lo = Math.round(Number(min));
+    let hi = Math.round(Number(max ?? min));
+    if (lo > hi) [lo, hi] = [hi, lo];
+    const sets = Math.round(Number(it.sets ?? it.set));
+    if (!Number.isFinite(sets) || sets < 1 || sets > 5) throw new Error(`Gün ${name}, ${EX[id].name}: set sayısı 1–5 olmalı.`);
+    if (!Number.isFinite(lo) || !Number.isFinite(hi) || lo < 1 || hi > 120) throw new Error(`Gün ${name}, ${EX[id].name}: tekrar aralığı hatalı.`);
+    return { ex: id, sets, min: lo, max: hi, ...(it.prep ? { prep: true } : {}) };
+  });
 }
