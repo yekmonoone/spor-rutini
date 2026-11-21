@@ -9,6 +9,8 @@ import { renderProgress } from './views/progress.js';
 import { renderHistory } from './views/history.js';
 import { renderSettings } from './views/settings.js';
 import { renderOnboarding } from './views/onboarding.js';
+import { renderSyncPage } from './views/sync-card.js';
+import { initSync } from './sync.js';
 
 const ROUTES = {
   '/bugun': { render: renderToday, tab: 'bugun', title: 'Bugün' },
@@ -18,7 +20,9 @@ const ROUTES = {
   '/gecmis': { render: renderHistory, tab: 'gecmis', title: 'Geçmiş' },
   '/ayarlar': { render: renderSettings, tab: 'ayarlar', title: 'Ayarlar' },
   '/hosgeldin': { render: renderOnboarding, tab: null, title: 'Hoş geldin' },
+  '/esitleme': { render: renderSyncPage, tab: null, title: 'Eşitleme' },
 };
+const NO_PROFILE_OK = ['/hosgeldin', '/esitleme'];
 
 const TABS = [
   { id: 'bugun', path: '/bugun', icon: '🏠', label: 'Bugün' },
@@ -56,7 +60,7 @@ function updateTabs(active) {
 }
 
 function render(path = currentPath(), { keepScroll = false } = {}) {
-  if (!state.profile && path !== '/hosgeldin') {
+  if (!state.profile && !NO_PROFILE_OK.includes(path)) {
     history.replaceState(null, '', '#/hosgeldin');
     path = '/hosgeldin';
   }
@@ -142,6 +146,7 @@ async function boot() {
     if (document.visibilityState === 'visible' && current && !current.handle?.sticky) render(current.path, { keepScroll: true });
   });
   render();
+  initSync();
   setupServiceWorker();
 }
 

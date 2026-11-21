@@ -13,7 +13,8 @@ export function buildBackup(raw, now = new Date()) {
     appVersion: APP_VERSION,
     exportedAt: now.toISOString(),
     data: {
-      kv: raw.kv ?? [],
+      // Eşitleme bilgileri (oturum anahtarları) yedek dosyasına girmez.
+      kv: (raw.kv ?? []).filter((e) => e.key !== 'sync'),
       workouts: raw.workouts ?? [],
       daily: raw.daily ?? [],
       padel: raw.padel ?? [],

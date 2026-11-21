@@ -9,6 +9,8 @@ import { exportBackupFlow, importBackupFlow } from '../forms.js';
 import { go } from '../context.js';
 import { profileForm } from './profile-form.js';
 import { installHint } from './onboarding.js';
+import { syncCard } from './sync-card.js';
+import { isConnected, signOut } from '../sync.js';
 
 export function renderSettings(root) {
   const s = state.settings;
@@ -47,10 +49,11 @@ export function renderSettings(root) {
   sound.input.addEventListener('change', async () => { await updateSettings({ sound: sound.input.checked }); saved(); });
 
   const wipe = async () => {
-    const ok1 = await confirmSheet({ title: 'Tüm verileri sil', message: 'Bu cihazdaki tüm kayıtlar, profil ve ayarlar silinecek. Geri alınamaz.\n\nÖnce yedek almanı öneririm.', confirmLabel: 'Devam', danger: true });
+    const ok1 = await confirmSheet({ title: 'Tüm verileri sil', message: 'Bu cihazdaki tüm kayıtlar, profil ve ayarlar silinecek. Geri alınamaz.\n\nEşitleme açıksa bu cihazda kapatılır; sunucudaki veriler silinmez.\n\nÖnce yedek almanı öneririm.', confirmLabel: 'Devam', danger: true });
     if (!ok1) return;
     const ok2 = await confirmSheet({ title: 'Emin misin?', message: 'Son onay: her şey kalıcı olarak silinecek.', confirmLabel: 'Hepsini sil', danger: true });
     if (!ok2) return;
+    if (isConnected()) await signOut(); // sunucudaki veriler geri gelmesin diye önce eşitlemeyi durdur
     await wipeAll();
     toast('Tüm veriler silindi');
     go('/hosgeldin');
@@ -69,6 +72,7 @@ export function renderSettings(root) {
       h('h3', { text: 'Haftalık takvim' }),
       schedule,
       h('div', { class: 'grid2' }, field('Set arası dinlenme', rest), h('div', { class: 'field end' }, sound))),
+    syncCard(),
     card(
       h('h2', { text: 'Yedekleme' }),
       h('p', { class: 'muted', text: lastBackup ? `Son yedek: ${fmtDate(lastBackup, { day: 'numeric', month: 'long', year: 'numeric' })}` : 'Henüz yedek alınmadı.' }),

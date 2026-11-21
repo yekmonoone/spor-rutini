@@ -70,9 +70,12 @@ tests/                Node testleri (node --test)
 tools/                Yerel sunucu ve simge üretici
 ```
 
-## Sonraki aşamalar
+## Eşitleme (2. aşama)
 
-- **2. aşama:** Supabase ile PC ↔ iPhone eşitleme (RLS zorunlu, bkz. gereksinimler §6).
+Telefon ve bilgisayar arasında Supabase üzerinden eşitleme: kurulum adımları [supabase/KURULUM.md](supabase/KURULUM.md), veritabanı ve RLS kuralları [supabase/schema.sql](supabase/schema.sql). Kütüphane kullanılmaz; `app/js/sync.js` Supabase'in REST uçlarına doğrudan bağlanır, karar mantığı `app/js/sync-core.js` içinde (son yazan kazanır, silmeler de eşitlenir). Bağlantı/oturum bilgisi yalnızca cihazda tutulur ve yedek dosyasına girmez.
+
+## Sonraki aşama
+
 - **3. aşama:** İsteğe bağlı yapay zekâ (aç/kapa, çoklu sağlayıcı, anahtarlar sunucu tarafında).
 
 > Bu uygulama genel bilgi verir, tıbbi tavsiye değildir.

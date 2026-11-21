@@ -1,9 +1,9 @@
 {
   "name": "spor-rutini",
-  "version": "0.1.0",
+  "version": "0.2.0",
   "private": true,
   "type": "module",
-  "description": "Spor rutini takip uygulaması (PWA) — 1. aşama: sadece telefon, veriler cihazda.",
+  "description": "Spor rutini takip uygulaması (PWA) — veriler cihazda, isteğe bağlı Supabase eşitleme.",
   "scripts": {
     "start": "node tools/serve.mjs",
     "test": "node --test \"tests/*.test.mjs\""

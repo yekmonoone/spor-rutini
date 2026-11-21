@@ -51,6 +51,7 @@ export function renderOnboarding(root) {
         phase,
         h('div', { class: 'hint', text: 'Bant ve mat gelene kadar "Ekipmansız" ile başla; sonra Ayarlar\'dan değiştirirsin.' }))),
     btn('Başla', begin, 'primary block big'),
+    h('p', { class: 'center' }, h('button', { type: 'button', class: 'link', text: 'Başka cihazda kullanıyor musun? Eşitlemeyle giriş yap', onClick: () => go('/esitleme') })),
     h('p', { class: 'center' }, h('button', { type: 'button', class: 'link', text: 'Yeni telefon mu? Yedekten geri yükle', onClick: importBackupFlow })),
     h('p', { class: 'muted small center disclaimer', text: 'Bu uygulama genel bilgi verir, tıbbi tavsiye değildir.' }),
   ]);

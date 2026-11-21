@@ -40,7 +40,19 @@ function run(storeName, mode, fn) {
 }
 
 export const idb = {
+  get: (store, key) => run(store, 'readonly', (s) => s.get(key)),
   getAll: (store) => run(store, 'readonly', (s) => s.getAll()),
+
+  /** [{ store, record }] listesini tek işlemde yazar. */
+  putMany: (items) => openDB().then((db) => new Promise((resolve, reject) => {
+    const names = [...new Set(items.map((i) => i.store))];
+    if (!names.length) { resolve(); return; }
+    const tx = db.transaction(names, 'readwrite');
+    for (const { store, record } of items) tx.objectStore(store).put(record);
+    tx.oncomplete = () => resolve();
+    tx.onerror = () => reject(tx.error);
+    tx.onabort = () => reject(tx.error || new Error('Yazma iptal edildi'));
+  })),
   put: (store, value) => run(store, 'readwrite', (s) => s.put(value)),
   delete: (store, key) => run(store, 'readwrite', (s) => s.delete(key)),
 

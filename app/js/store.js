@@ -69,8 +69,16 @@ export async function loadAll() {
 
 export async function setKV(key, value, { silent = false } = {}) {
   state[key] = value;
-  await idb.put('kv', { key, value: deepCopy(value) });
+  await idb.put('kv', { key, value: deepCopy(value), updatedAt: new Date().toISOString() });
   if (!silent) emit();
+}
+
+/** Eşitlemeden gelen daha yeni kayıtları yazar ve durumu yeniler. writes: [{ store, record }] */
+export async function applyRemote(writes) {
+  if (!writes.length) return;
+  await idb.putMany(writes);
+  await loadAll();
+  emit();
 }
 
 export function updateSettings(patch) {
@@ -138,6 +146,10 @@ export function dismissAlert(id) {
 /** Yedekten geri yükler: mevcut tüm verilerin yerini alır. */
 export async function importBackup(obj) {
   const data = validateBackup(obj);
+  // Eşitleme bağlantısı cihaza özeldir; geri yüklemede korunur.
+  const sync = await idb.get('kv', 'sync');
+  data.kv = data.kv.filter((e) => e.key !== 'sync');
+  if (sync) data.kv.push(sync);
   await idb.replaceAll(data);
   await loadAll();
   emit();
