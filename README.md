@@ -32,6 +32,10 @@ npm test
 
 Not: Yerel adreste service worker (çevrimdışı önbellek) kapalıdır ki her değişiklik hemen görünsün. Denemek için adrese `?sw=1` ekle.
 
+## Yayın
+
+Adres: **https://yekmonoone.github.io/spor-rutini/** — `main` dalına her gönderimde GitHub Actions testleri çalıştırır ve `app/` klasörünü yayınlar (`.github/workflows/pages.yml`). Kişisel bilgiler içeren `spor-rutini-plani.md` depoya eklenmez (`.gitignore`).
+
 ## Telefona kurma (iPhone)
 
 iPhone'un uygulamayı ana ekrana ekleyebilmesi için `app/` klasörünün bir **HTTPS** adresinde yayınlanması gerekir (ör. GitHub Pages veya Cloudflare Pages — ikisi de ücretsiz). Yalnızca `app/` klasörü yayınlanır; plan dosyaları ve kişisel bilgiler yayınlanmaz.
