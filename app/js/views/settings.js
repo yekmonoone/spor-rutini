@@ -11,6 +11,30 @@ import { profileForm } from './profile-form.js';
 import { installHint } from './onboarding.js';
 import { syncCard } from './sync-card.js';
 import { isConnected, signOut } from '../sync.js';
+import { AI_TARGETS } from '../ai.js';
+
+function aiCard() {
+  const s = state.settings;
+  const on = checkbox('Yapay zekâ asistanını göster', !!s.aiEnabled);
+  on.input.addEventListener('change', async () => { await updateSettings({ aiEnabled: on.input.checked }); toast(on.input.checked ? 'Asistan açıldı' : 'Asistan kapatıldı'); });
+  const target = selectEl(Object.entries(AI_TARGETS).map(([value, t]) => ({ value, label: t.label })), s.aiTarget ?? 'claude', async (v) => { await updateSettings({ aiTarget: v }); toast('Kaydedildi ✓'); });
+  const c = s.customProgram;
+  return card(
+    h('h2', { text: 'Yapay zekâ asistanı' }),
+    on,
+    field('Hangi uygulamada açılsın?', target, 'Mesaj panoya kopyalanır ve seçtiğin uygulama açılır (Claude Pro ile ek ücret yok).'),
+    c ? h('div', { class: 'notice' },
+      h('p', null, h('strong', { text: `Yapay zekâ programı kullanılıyor (${PHASES[c.phase]?.label}, ${fmtDate(c.appliedAt)})` })),
+      c.phase !== s.phase ? h('p', { class: 'small', text: 'Şu anki dönem farklı olduğu için şimdilik varsayılan program kullanılıyor.' }) : null,
+      btn('Varsayılan programa dön', async () => {
+        if (await confirmSheet({ title: 'Varsayılan programa dön', message: 'Yapay zekâdan aktarılan program kaldırılacak.', confirmLabel: 'Dön' })) {
+          await updateSettings({ customProgram: null });
+          toast('Varsayılan program');
+        }
+      }, 'small')) : null,
+    s.aiEnabled ? btn('Asistanı aç', () => go('/asistan'), 'block') : null,
+    h('p', { class: 'muted small', text: 'Kapalıyken uygulama aynen çalışır. Hiçbir veri otomatik gönderilmez; yalnızca kopyaladığın metin paylaşılır.' }));
+}
 
 export function renderSettings(root) {
   const s = state.settings;
@@ -79,10 +103,7 @@ export function renderSettings(root) {
       h('p', { class: 'small', text: 'Veriler yalnızca bu cihazda duruyor. Haftada bir yedek al: iPhone\'da paylaşım penceresinden "Dosyalar\'a Kaydet" → iCloud Drive.' }),
       h('div', { class: 'actions-row' }, btn('Yedeği dışa aktar', exportBackupFlow, 'primary'), btn('Yedekten geri yükle', importBackupFlow))),
     isIOS() && !isStandalone() ? installHint() : null,
-    card(
-      h('h2', { text: 'Yapay zekâ asistanı' }),
-      h('label', { class: 'check disabled' }, h('input', { type: 'checkbox', disabled: true }), h('span', { text: 'Kapalı — 3. aşamada eklenecek' })),
-      h('p', { class: 'muted small', text: 'Planlanan: açılıp kapatılabilen, farklı AI servisleriyle çalışan sohbet, haftalık değerlendirme ve program önerisi. Kapalıyken uygulama aynen çalışır.' })),
+    aiCard(),
     card(
       h('h2', { text: 'Veriler' }),
       btn('Tüm verileri sil', wipe, 'danger-ghost')),

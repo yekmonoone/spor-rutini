@@ -2,7 +2,7 @@
 // Uyarı: { id, level: 'warn'|'info'|'success', icon, title, body, action?: { label, to } }
 // action.to: bir sayfa yolu ('/antrenman') ya da 'form:daily' | 'form:padel' | 'form:measure' | 'backup'
 import { addDays, avg, daysBetween, fmtNum, weekStart, weekday } from './util.js';
-import { EX, WEEKLY_STRENGTH_MIN, WEEKLY_STRENGTH_TARGET, blockOf, programWeek, progressionHint } from './program.js';
+import { EX, WEEKLY_STRENGTH_MIN, WEEKLY_STRENGTH_TARGET, blockOf, programFor, programWeek, progressionHint } from './program.js';
 import { countInWeek, isStrength, progressionDue, trackedItems, valuesInRange, weeklyAverages } from './stats.js';
 
 export const PAIN_AREAS = { elbow: 'Dirsek', shoulder: 'Omuz', knee: 'Diz', back: 'Bel' };
@@ -163,7 +163,7 @@ function padelPain({ padel, today }) {
 
 function progression({ workouts, settings }) {
   const due = [];
-  for (const item of trackedItems(settings?.phase ?? 'bodyweight')) {
+  for (const item of trackedItems(programFor(settings))) {
     const last = progressionDue(workouts, item.ex);
     if (last) due.push({ item, last });
   }

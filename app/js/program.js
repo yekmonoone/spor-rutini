@@ -38,6 +38,14 @@ export const PROGRAMS = {
   },
 };
 
+/** Etkin program: yapay zekâdan aktarılmış özel program o dönem için varsa onu, yoksa varsayılanı döndürür. */
+export function programFor(settings) {
+  const phase = settings?.phase ?? 'bodyweight';
+  const c = settings?.customProgram;
+  if (c && c.phase === phase && Array.isArray(c.A) && Array.isArray(c.B)) return { A: c.A, B: c.B, custom: true, note: c.note ?? '' };
+  return PROGRAMS[phase] ?? PROGRAMS.bodyweight;
+}
+
 export function warmupFor(phase) {
   const list = ['Yerinde yürüyüş veya hafif tempo — 1 dk', 'Kol çevirme — 30 sn', 'Kalça çevirme — 30 sn', 'Yarım squat — 10 tekrar'];
   if (phase !== 'bodyweight') list.push('Bant ile dış rotasyon — 2 × 12');

@@ -11,6 +11,7 @@ import { renderSettings } from './views/settings.js';
 import { renderOnboarding } from './views/onboarding.js';
 import { renderSyncPage } from './views/sync-card.js';
 import { initSync } from './sync.js';
+import { renderAssistant } from './views/assistant.js';
 
 const ROUTES = {
   '/bugun': { render: renderToday, tab: 'bugun', title: 'Bugün' },
@@ -21,6 +22,7 @@ const ROUTES = {
   '/ayarlar': { render: renderSettings, tab: 'ayarlar', title: 'Ayarlar' },
   '/hosgeldin': { render: renderOnboarding, tab: null, title: 'Hoş geldin' },
   '/esitleme': { render: renderSyncPage, tab: null, title: 'Eşitleme' },
+  '/asistan': { render: renderAssistant, tab: 'bugun', title: 'Asistan' },
 };
 const NO_PROFILE_OK = ['/hosgeldin', '/esitleme'];
 

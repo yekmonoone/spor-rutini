@@ -2,7 +2,7 @@
 import { state, setKV, saveRecord } from '../store.js';
 import { h, appendChildren, btn, confirmSheet, toast, numInput, field, checkbox } from '../ui.js';
 import {
-  EX, PROGRAMS, BAND_LEVELS, warmupFor, COOLDOWN, plannedSets, programWeek, rirTarget,
+  EX, programFor, BAND_LEVELS, warmupFor, COOLDOWN, plannedSets, programWeek, rirTarget,
   defaultResistance, resistanceText, targetText, progressionHint, unitSuffix,
 } from '../program.js';
 import { lastPerformance, progressionDue } from '../stats.js';
@@ -60,7 +60,7 @@ export async function startWorkout(day) {
     warmup: warmupFor(phase).map(() => false),
     cooldownDone: false,
     note: '',
-    exercises: PROGRAMS[phase][day].map((item) => buildExercise(item, week, state.workouts)),
+    exercises: programFor(state.settings)[day].map((item) => buildExercise(item, week, state.workouts)),
   };
   await setKV('draft', d, { silent: true });
   go('/antrenman/aktif');

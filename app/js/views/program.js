@@ -1,7 +1,7 @@
 // Antrenman sekmesi: dönem, A/B günleri, hareket açıklamaları, son antrenmanlar.
 import { state } from '../store.js';
 import { h, btn, card } from '../ui.js';
-import { EX, PHASES, PROGRAMS, COOLDOWN, warmupFor, nextStrengthDay, plannedSets, programWeek, rirTarget, targetText } from '../program.js';
+import { EX, PHASES, programFor, COOLDOWN, warmupFor, nextStrengthDay, plannedSets, programWeek, rirTarget, targetText } from '../program.js';
 import { isStrength } from '../stats.js';
 import { fmtDate } from '../util.js';
 import { today, startKey, go } from '../context.js';
@@ -22,7 +22,7 @@ function exerciseRow(item, sets) {
 
 export function renderProgram(root) {
   const phase = state.settings.phase;
-  const prog = PROGRAMS[phase];
+  const prog = programFor(state.settings);
   const week = Math.max(1, programWeek(startKey(), today()));
   const next = nextStrengthDay(state.workouts);
   const rir = rirTarget(week);
@@ -30,7 +30,8 @@ export function renderProgram(root) {
   root.append(h('header', { class: 'page-head' },
     h('div', null,
       h('h1', { text: 'Antrenman' }),
-      h('p', { class: 'muted', text: `${PHASES[phase].label} dönemi · Hafta ${week}` }))));
+      h('p', { class: 'muted', text: `${PHASES[phase].label} dönemi · Hafta ${week}${prog.custom ? ' · 🤖 yapay zekâ programı' : ''}` }))));
+  if (prog.custom && prog.note) root.append(h('div', { class: 'notice pre', text: prog.note }));
 
   if (state.draft) {
     root.append(h('section', { class: 'card highlight' },

@@ -83,6 +83,7 @@
 }
 
 * { box-sizing: border-box; }
+[hidden] { display: none !important; }
 html { -webkit-text-size-adjust: 100%; }
 body {
   margin: 0;
@@ -569,3 +570,17 @@ th { color: var(--text-2); font-weight: 600; font-size: 13px; }
 @media (prefers-reduced-motion: reduce) {
   *, *::before, *::after { transition: none !important; }
 }
+
+/* ---------- Asistan ---------- */
+.prompt-preview {
+  white-space: pre-wrap;
+  word-break: break-word;
+  font-size: 12px;
+  line-height: 1.4;
+  background: var(--surface-2);
+  border-radius: 10px;
+  padding: 10px;
+  max-height: 320px;
+  overflow: auto;
+}
+.segmented:not(.scroll-x) .seg { white-space: normal; min-width: 0; line-height: 1.2; }

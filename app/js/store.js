@@ -25,6 +25,9 @@ export function defaultSettings() {
     programStart: null,           // 'YYYY-AA-GG'
     restSec: 75,
     sound: true,
+    aiEnabled: false,
+    aiTarget: 'claude',           // 'claude' | 'chatgpt' | 'gemini' | 'other'
+    customProgram: null,          // yapay zekâdan aktarılan program { phase, A, B, note, appliedAt }
     // Pazartesi → Pazar
     schedule: ['strength', 'brisk', 'strength', 'strength', 'walk', 'padel', 'rest'],
   };

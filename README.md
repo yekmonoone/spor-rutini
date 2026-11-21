@@ -74,8 +74,9 @@ tools/                Yerel sunucu ve simge üretici
 
 Telefon ve bilgisayar arasında Supabase üzerinden eşitleme: kurulum adımları [supabase/KURULUM.md](supabase/KURULUM.md), veritabanı ve RLS kuralları [supabase/schema.sql](supabase/schema.sql). Kütüphane kullanılmaz; `app/js/sync.js` Supabase'in REST uçlarına doğrudan bağlanır, karar mantığı `app/js/sync-core.js` içinde (son yazan kazanır, silmeler de eşitlenir). Bağlantı/oturum bilgisi yalnızca cihazda tutulur ve yedek dosyasına girmez.
 
-## Sonraki aşama
+## Yapay zekâ
 
-- **3. aşama:** İsteğe bağlı yapay zekâ (aç/kapa, çoklu sağlayıcı, anahtarlar sunucu tarafında).
+- **3. aşama (kopyala-yapıştır modu, sürüm 0.3.0):** Ayarlar → Yapay zekâ asistanı. Uygulama verilerden hazır bir mesaj üretir (değerlendirme, yeni program, soru), panoya kopyalar ve Claude/ChatGPT/Gemini'yi açar; ağ isteği yapmaz (`app/js/ai.js`). Yapay zekânın verdiği ```json programı geri yapıştırılınca doğrulanır ve onayla uygulanır (`settings.customProgram`).
+- **Sonra (isteğe bağlı):** API ile uygulama içi otomatik mod (anahtar Supabase Edge Function'da).
 
 > Bu uygulama genel bilgi verir, tıbbi tavsiye değildir.

@@ -120,8 +120,8 @@ export function progressionDue(workouts, exId) {
 }
 
 /** İlerlemesi takip edilen hareketler (hazırlık ve sabit sayılı olanlar hariç). */
-export function trackedItems(phase) {
-  const prog = PROGRAMS[phase] ?? PROGRAMS.bodyweight;
+export function trackedItems(phaseOrProgram) {
+  const prog = typeof phaseOrProgram === 'object' && phaseOrProgram ? phaseOrProgram : (PROGRAMS[phaseOrProgram] ?? PROGRAMS.bodyweight);
   const seen = new Set();
   const out = [];
   for (const day of ['A', 'B']) {

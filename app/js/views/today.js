@@ -128,6 +128,13 @@ export function renderToday(root) {
   root.append(planCard(t));
   const alerts = currentAlerts();
   if (alerts.length) root.append(h('section', { class: 'alerts', 'aria-label': 'Uyarılar ve öneriler' }, alerts.map(alertCard)));
+  if (state.settings.aiEnabled) {
+    root.append(h('section', { class: 'card' },
+      h('div', { class: 'card-head' },
+        h('h2', { text: '🤖 Yapay zekâ asistanı' }),
+        btn('Aç', () => go('/asistan'), 'small primary')),
+      h('p', { class: 'muted small', text: 'Haftalık değerlendirme, yeni program ya da kendi sorun için hazır mesaj.' })));
+  }
   root.append(dailyCard(t), weekCard(t));
   const tc = targetsCard();
   if (tc) root.append(tc);
