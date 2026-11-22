@@ -3,7 +3,7 @@
 
 export const SYNC_STORES = ['kv', 'workouts', 'daily', 'padel', 'measurements'];
 /** Cihazlar arasında paylaşılan ayar anahtarları. 'draft' (yarım antrenman) ve 'sync' cihaza özeldir. */
-export const SYNC_KV_KEYS = ['profile', 'settings', 'meta'];
+export const SYNC_KV_KEYS = ['profile', 'settings', 'meta', 'mealplan', 'shopping'];
 const EPOCH = '2000-01-01T00:00:00.000Z';
 
 const ms = (iso) => {

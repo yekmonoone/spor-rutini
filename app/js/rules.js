@@ -4,6 +4,7 @@
 import { addDays, avg, daysBetween, fmtNum, weekStart, weekday } from './util.js';
 import { EX, WEEKLY_STRENGTH_MIN, WEEKLY_STRENGTH_TARGET, blockOf, programFor, programWeek, progressionHint } from './program.js';
 import { countInWeek, isStrength, progressionDue, trackedItems, valuesInRange, weeklyAverages } from './stats.js';
+import { shoppingList, shoppingCycle, countShopping } from './mealplan.js';
 
 export const PAIN_AREAS = { elbow: 'Dirsek', shoulder: 'Omuz', knee: 'Diz', back: 'Bel' };
 
@@ -279,9 +280,28 @@ function backupDue({ meta, today, workouts, padel, measurements, daily }) {
   };
 }
 
+function shoppingDay({ mealplan, shopping, today }) {
+  if (!mealplan?.days) return null;
+  const day = mealplan.prefs?.shoppingDay ?? 6;
+  if (weekday(today) !== day) return null;
+  const cycle = shoppingCycle(today, day);
+  const checked = shopping?.cycle === cycle ? shopping.checked ?? {} : {};
+  const extra = shopping?.cycle === cycle ? shopping.extra ?? [] : [];
+  const { total, done } = countShopping(shoppingList(mealplan), extra, checked);
+  if (!total || done >= total) return null;
+  return {
+    id: `shop@${cycle}`,
+    level: 'info',
+    icon: '🛒',
+    title: 'Alışveriş günü',
+    body: `Haftalık listede ${total - done} ürün var. Kısa ömürlüleri (yeşillik, lor, hindi füme) hafta ortasına bölebilirsin.`,
+    action: { label: 'Listeyi aç', to: '/yemek/alisveris' },
+  };
+}
+
 export const RULES = [
   strengthThisWeek, longGap, lastWeek, proteinLow, sleepLow, weightRate, padelPain,
-  progression, dumbbellTime, weighIns, stepsLow, measurementsDue, blockDone, backupDue,
+  progression, dumbbellTime, weighIns, stepsLow, measurementsDue, blockDone, shoppingDay, backupDue,
 ];
 
 /**

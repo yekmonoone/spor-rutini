@@ -5,7 +5,7 @@ import { timeChart, columnChart, chartBlock, tableView } from '../charts.js';
 import { EX, PROGRAMS, PHASE_ORDER, WEEKLY_STRENGTH_TARGET, blockOf, programWeek, resistanceText, unitSuffix } from '../program.js';
 import { weeklyAverages, weeklySessions, exerciseHistory, blockSummary, valuesInRange, isStrength } from '../stats.js';
 import { addDays, avg, clamp, daysBetween, fmtDate, fmtNum, weekStart } from '../util.js';
-import { today, startKey } from '../context.js';
+import { today, startKey, go } from '../context.js';
 
 const SERIES_1 = 'var(--series-1)';
 const SERIES_2 = 'var(--series-2)';
@@ -217,7 +217,9 @@ export function renderProgress(root) {
   filter.setAttribute('aria-label', 'Zaman aralığı');
 
   root.append(
-    h('header', { class: 'page-head' }, h('div', null, h('h1', { text: 'İlerleme' }), h('p', { class: 'muted', text: 'Tek tek günlere değil, eğilime bak.' }))),
+    h('header', { class: 'page-head' },
+      h('div', null, h('h1', { text: 'İlerleme' }), h('p', { class: 'muted', text: 'Tek tek günlere değil, eğilime bak.' })),
+      h('button', { type: 'button', class: 'btn small', text: '🗂️ Geçmiş kayıtlar', onClick: () => go('/gecmis') })),
     h('div', { class: 'filter-row' }, filter),
     weightSection(from),
     waistSection(from),

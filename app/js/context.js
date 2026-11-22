@@ -20,6 +20,8 @@ export function ruleCtx(t = today()) {
     padel: state.padel,
     measurements: state.measurements,
     daily: state.daily,
+    mealplan: state.mealplan,
+    shopping: state.shopping,
     today: t,
     startKey: startKey(),
   };

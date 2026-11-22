@@ -12,13 +12,19 @@ import { renderOnboarding } from './views/onboarding.js';
 import { renderSyncPage } from './views/sync-card.js';
 import { initSync } from './sync.js';
 import { renderAssistant } from './views/assistant.js';
+import { renderMeals } from './views/meals.js';
 
 const ROUTES = {
   '/bugun': { render: renderToday, tab: 'bugun', title: 'Bugün' },
   '/antrenman': { render: renderProgram, tab: 'antrenman', title: 'Antrenman' },
   '/antrenman/aktif': { render: renderActive, tab: 'antrenman', title: 'Antrenman' },
   '/ilerleme': { render: renderProgress, tab: 'ilerleme', title: 'İlerleme' },
-  '/gecmis': { render: renderHistory, tab: 'gecmis', title: 'Geçmiş' },
+  '/gecmis': { render: renderHistory, tab: 'ilerleme', title: 'Geçmiş' },
+  '/yemek': { render: (r) => renderMeals(r, 'bugun'), tab: 'yemek', title: 'Yemek' },
+  '/yemek/plan': { render: (r) => renderMeals(r, 'plan'), tab: 'yemek', title: 'Yemek planı' },
+  '/yemek/alisveris': { render: (r) => renderMeals(r, 'alisveris'), tab: 'yemek', title: 'Alışveriş' },
+  '/yemek/rehber': { render: (r) => renderMeals(r, 'rehber'), tab: 'yemek', title: 'Yemek rehberi' },
+  '/yemek/tercihler': { render: (r) => renderMeals(r, 'tercihler'), tab: 'yemek', title: 'Yemek tercihleri' },
   '/ayarlar': { render: renderSettings, tab: 'ayarlar', title: 'Ayarlar' },
   '/hosgeldin': { render: renderOnboarding, tab: null, title: 'Hoş geldin' },
   '/esitleme': { render: renderSyncPage, tab: null, title: 'Eşitleme' },
@@ -29,8 +35,8 @@ const NO_PROFILE_OK = ['/hosgeldin', '/esitleme'];
 const TABS = [
   { id: 'bugun', path: '/bugun', icon: '🏠', label: 'Bugün' },
   { id: 'antrenman', path: '/antrenman', icon: '🏋️', label: 'Antrenman' },
+  { id: 'yemek', path: '/yemek', icon: '🍽️', label: 'Yemek' },
   { id: 'ilerleme', path: '/ilerleme', icon: '📈', label: 'İlerleme' },
-  { id: 'gecmis', path: '/gecmis', icon: '🗂️', label: 'Geçmiş' },
   { id: 'ayarlar', path: '/ayarlar', icon: '⚙️', label: 'Ayarlar' },
 ];
 

@@ -584,3 +584,45 @@ th { color: var(--text-2); font-weight: 600; font-size: 13px; }
   overflow: auto;
 }
 .segmented:not(.scroll-x) .seg { white-space: normal; min-width: 0; line-height: 1.2; }
+
+/* ---------- Yemek ---------- */
+.meter { height: 10px; border-radius: 999px; background: var(--accent-weak); overflow: hidden; margin: 6px 0 4px; }
+.meter-fill { height: 100%; border-radius: 999px; background: var(--accent); transition: width 0.3s ease; }
+.meal-card.eaten { border-color: var(--good); }
+.meal-card .meal-info { margin: 4px 0; }
+.meal-name { font-weight: 650; }
+.badges { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 6px; }
+.badges .badge { font-size: 12px; }
+.section-title { margin: 16px 4px 8px; font-size: 15px; color: var(--text-2); }
+.day-card.today { border-color: var(--accent); }
+.slot-row {
+  display: grid;
+  grid-template-columns: 74px 1fr auto;
+  gap: 8px;
+  align-items: center;
+  width: 100%;
+  min-height: 44px;
+  padding: 8px 4px;
+  border: 0;
+  border-bottom: 1px solid var(--border);
+  background: transparent;
+  text-align: left;
+  cursor: pointer;
+}
+.slot-row:last-of-type { border-bottom: 0; }
+.slot-row:active { background: var(--surface-2); }
+.slot-row.add .slot-label { text-align: center; color: var(--accent); font-weight: 700; }
+.slot-label { font-size: 12px; color: var(--text-2); font-weight: 600; }
+.slot-name { font-size: 15px; }
+.day-warn p { margin: 6px 0 0; }
+.shop-item { display: flex; gap: 10px; align-items: flex-start; padding: 8px 0; border-bottom: 1px solid var(--border); cursor: pointer; }
+.shop-item:last-of-type { border-bottom: 0; }
+.shop-item input { width: 22px; height: 22px; margin-top: 1px; accent-color: var(--accent); flex: 0 0 auto; }
+.shop-item input:checked + .shop-text { text-decoration: line-through; color: var(--muted); }
+.shop-text { display: flex; flex-wrap: wrap; align-items: baseline; gap: 0 4px; }
+.shop-note { flex-basis: 100%; font-size: 12px; color: var(--text-2); }
+.add-row { display: flex; gap: 8px; margin-top: 10px; }
+.add-row .input { flex: 1 1 auto; }
+.sug-list { display: flex; flex-direction: column; gap: 6px; }
+.sug { display: flex; justify-content: space-between; align-items: center; gap: 8px; padding: 6px 0; border-bottom: 1px solid var(--border); }
+.sug:last-child { border-bottom: 0; }

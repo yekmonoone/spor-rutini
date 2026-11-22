@@ -6,6 +6,9 @@ import { weeklyAverages, weeklySessions, exerciseHistory, trackedItems, valuesIn
 import { ageFromBirthYear } from './targets.js';
 import { addDays, avg, fmtDate, fmtNum, weekStart, WEEKDAYS } from './util.js';
 import { PAIN_AREAS } from './rules.js';
+import { extractJson } from './extract-json.js';
+import { MEALS, OUT_OPTIONS, TOOLS } from './foods.js';
+import { defaultPrefs, buildDefaultPlan, mealNutrition } from './mealplan.js';
 
 export const AI_TARGETS = {
   claude: { label: 'Claude', url: 'https://claude.ai/new' },
@@ -16,9 +19,36 @@ export const AI_TARGETS = {
 
 export const PROMPT_KINDS = {
   review: { label: 'Değerlendir', icon: '📋' },
-  program: { label: 'Yeni program', icon: '🗓️' },
+  program: { label: 'Program', icon: '🗓️' },
+  meals: { label: 'Yemek', icon: '🍽️' },
   question: { label: 'Soru', icon: '💬' },
 };
+
+function mealsSection(state, today) {
+  const plan = state.mealplan;
+  const prefs = { ...defaultPrefs(), ...(plan?.prefs ?? {}) };
+  const days = (list) => (list?.length ? list.map((i) => WEEKDAYS[i]).join(', ') : 'yok');
+  let marked = 0;
+  let out = 0;
+  for (let i = 0; i < 7; i++) {
+    for (const m of Object.values(state.daily[addDays(today, -i)]?.meals ?? {})) {
+      marked++;
+      if (m?.place === 'out') out++;
+    }
+  }
+  return [
+    '- Kahvaltı yapmıyorum; günde 2 öğün + ara öğün. İlk öğün öğlen (evdeysem kahvaltı tipi), akşam karışık (ev/paket/dışarı).',
+    `- Öğleni dışarıda yediğim günler: ${days(prefs.lunchOutDays)}; akşamı dışarıda/paket: ${days(prefs.dinnerOutDays)}.`,
+    `- Mutfak: ${prefs.tools.map((t) => TOOLS[t] ?? t).join(', ') || 'yok'}. Yemek yapmayı sevmiyorum; eksik malzeme, bozulan ürün ve bulaşık sorun oluyor. Besin kısıtlamam yok.`,
+    plan?.days ? `- Son 7 günde uygulamada işaretlenen öğün: ${marked} (dışarıda: ${out}).` : '- Henüz uygulamada yemek planı yok.',
+  ].join('\n');
+}
+
+function mealLibraryText() {
+  const home = Object.values(MEALS).map((m) => `${m.id} (${m.name}, ~${mealNutrition(m).mid} g)`).join('; ');
+  const out = Object.values(OUT_OPTIONS).map((o) => `${o.id} (${o.name}, ~${mealNutrition(o).mid} g)`).join('; ');
+  return { home, out };
+}
 
 const n = (v, d = 1, unit = '') => (v == null ? '–' : `${fmtNum(v, d)}${unit}`);
 
@@ -102,7 +132,7 @@ const SAFETY = [
 ].join('\n');
 
 /**
- * kind: 'review' | 'program' | 'question'
+ * kind: 'review' | 'program' | 'meals' | 'question'
  * ctx: { state, today, startKey, alerts, question }
  */
 export function buildPrompt(kind, { state, today, startKey, alerts = [], question = '' }) {
@@ -121,6 +151,28 @@ export function buildPrompt(kind, { state, today, startKey, alerts = [], questio
       JSON.stringify({ phase: state.settings.phase, note: 'kısa açıklama', ...(() => { const p = programFor(state.settings); return { A: p.A.map(({ ex, sets, min, max, prep }) => ({ ex, sets, min, max, ...(prep ? { prep } : {}) })), B: p.B.map(({ ex, sets, min, max, prep }) => ({ ex, sets, min, max, ...(prep ? { prep } : {}) })) }; })() }),
       '```',
     ].join('\n'),
+    meals: (() => {
+      const p = state.profile ?? {};
+      const lib = mealLibraryText();
+      const days = state.mealplan?.days ?? buildDefaultPlan({ ...defaultPrefs(), ...(state.mealplan?.prefs ?? {}) }, p);
+      return [
+        'Görev: Bana 7 günlük (Pazartesi → Pazar) yemek planı hazırla. Önce kısa bir açıklama yaz.',
+        `- Her gün protein en az ${p.proteinMin ?? 120} g (hedef ${p.proteinMin ?? 120}–${p.proteinMax ?? 140} g). Günlük kalori ortalama ${fmtNum(p.kcalMin ?? 2000, 0)}–${fmtNum(p.kcalMax ?? 2200, 0)} kcal civarında olsun, çok düşük kalmasın.`,
+        '- Ev öğünleri en fazla 10 dk aktif hazırlık ve en fazla 2 bulaşık; mutfaktaki aletlerimi kullan.',
+        '- Kısa ömürlü taze malzemeyi (yeşillik, lor, hindi füme, muz) 3–4 gün içinde kullanacak şekilde planla; dondurulmuş, konserve ve uzun ömürlüleri tercih et; aynı malzemeyi birkaç öğünde kullan.',
+        '- Dışarıda yediğim öğünler için "out" yaz ya da aşağıdaki dışarıda seçeneklerinden birinin kimliğini ver.',
+        'En sonda TEK bir ```json bloğu ver. Kurallar:',
+        '- Yalnızca geçerli JSON: çift tırnak, yorum yok, sondaki virgül yok.',
+        '- "days": tam 7 öğe (Pazartesi → Pazar); her öğe {"first", "dinner", "snack1", "snack2"}. Değer: hazır öğün kimliği, "meals" içinde tanımladığın öğünün "id"si, "out" ya da null.',
+        '- "meals" (isteğe bağlı, kendi öğünlerin): [{"id", "name", "slot": "first|dinner|snack", "protein": sayı, "kcal": sayı, "minutes": sayı, "steps": ["..."], "ingredients": [{"name", "qty": sayı, "unit": "g|ml|adet"}]}]',
+        `- Hazır öğün kimlikleri: ${lib.home}`,
+        `- Dışarıda seçenek kimlikleri: ${lib.out}`,
+        'Şu anki planım bu biçimde (örnek olarak kullan, değiştirerek ver):',
+        '```json',
+        JSON.stringify({ note: 'kısa açıklama', days, meals: [] }),
+        '```',
+      ].join('\n');
+    })(),
     question: `Sorum: ${question.trim() || '(buraya sorunu yaz)'}`,
   }[kind];
 
@@ -137,6 +189,8 @@ export function buildPrompt(kind, { state, today, startKey, alerts = [], questio
     '',
     `## Padel\n${padelSection(state, today)}`,
     '',
+    `## Yemek düzeni\n${mealsSection(state, today)}`,
+    '',
     `## Uygulamanın uyarıları\n${alerts.length ? alerts.map((a) => `- ${a.title}`).join('\n') : '- Yok'}`,
     '',
     SAFETY,
@@ -149,21 +203,10 @@ export function buildPrompt(kind, { state, today, startKey, alerts = [], questio
 
 /** Yapay zekânın cevabındaki JSON programı okur ve doğrular. Hata varsa Türkçe mesajla fırlatır. */
 export function parseProgram(text) {
-  const s = String(text ?? '');
-  // Aday metinler: tüm kod blokları, sonra ilk { ile son } arası.
-  const candidates = [...s.matchAll(/```[a-zA-Z]*\s*([\s\S]*?)```/g)].map((m) => m[1]);
-  const a = s.indexOf('{');
-  const b = s.lastIndexOf('}');
-  if (a >= 0 && b > a) candidates.push(s.slice(a, b + 1));
-  if (!candidates.length) throw new Error('Metinde program bulunamadı. Cevaptaki ```json bloğunun tamamını yapıştır.');
-
-  let obj = null;
-  for (const c of candidates) {
-    obj = tryJson(c);
-    if (obj && typeof obj === 'object') break;
-  }
-  if (!obj) throw new Error('Program okunamadı: JSON bozuk. Yapay zekâya "Programı yalnızca geçerli JSON olarak, tek bir ```json bloğunda tekrar ver" yaz.');
-  obj = unwrap(obj);
+  const { found, obj: raw } = extractJson(text, (o) => o != null && typeof o === 'object' && !Array.isArray(o));
+  if (!found) throw new Error('Metinde program bulunamadı. Cevaptaki ```json bloğunun tamamını yapıştır.');
+  if (!raw) throw new Error('Program okunamadı: JSON bozuk. Yapay zekâya "Programı yalnızca geçerli JSON olarak, tek bir ```json bloğunda tekrar ver" yaz.');
+  const obj = unwrap(raw);
 
   const phase = obj.phase ?? obj.donem ?? obj['dönem'] ?? null;
   if (phase != null && !PHASES[phase]) throw new Error(`Bilinmeyen dönem: "${phase}". bodyweight, band ya da dumbbell olmalı.`);
@@ -172,18 +215,6 @@ export function parseProgram(text) {
   if (!A || !B) throw new Error('Programda Gün A ve Gün B listeleri bulunamadı ("A": [...], "B": [...]).');
   const note = obj.note ?? obj.not ?? obj['açıklama'] ?? '';
   return { phase, note: typeof note === 'string' ? note.slice(0, 500) : '', A: parseDay(A, 'A'), B: parseDay(B, 'B') };
-}
-
-/** JSON'u dener; olmazsa akıllı tırnak, yorum ve sondaki virgülleri temizleyip tekrar dener. */
-function tryJson(text) {
-  try { return JSON.parse(text); } catch { /* temizle */ }
-  const cleaned = text
-    .replace(/[“”„″]/g, '"')
-    .replace(/[‘’]/g, "'")
-    .replace(/\/\*[\s\S]*?\*\//g, '')
-    .replace(/(^|[^:"'])\/\/.*$/gm, '$1')
-    .replace(/,\s*([}\]])/g, '$1');
-  try { return JSON.parse(cleaned); } catch { return null; }
 }
 
 function unwrap(obj) {

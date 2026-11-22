@@ -1,6 +1,6 @@
 # Spor Takip Uygulaması — Gereksinimler
 
-> Durum: **1. ve 2. aşama geliştirildi** (sürüm 0.2.0, yayında: https://yekmonoone.github.io/spor-rutini/ — eşitleme için Supabase projesi kurulmalı: [supabase/KURULUM.md](supabase/KURULUM.md)) · Rutin için: [spor-rutini-plani.md](spor-rutini-plani.md) · Çalıştırma: [README.md](README.md)
+> Durum: **1., 2. ve 3. aşama + yemek düzeni geliştirildi** (sürüm 0.4.0, yayında: https://yekmonoone.github.io/spor-rutini/ — eşitleme için Supabase projesi kurulmalı: [supabase/KURULUM.md](supabase/KURULUM.md)) · Rutin için: [spor-rutini-plani.md](spor-rutini-plani.md) · Çalıştırma: [README.md](README.md)
 
 ## 1. Amaç
 Verileri ve ilerlemeyi düzenli tutmak; isteğe bağlı AI ile konuşmak; uyarı ve öneri almak; önümüzdeki dönem için program oluşturmak.

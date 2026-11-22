@@ -1,12 +1,44 @@
 // Yapay zekâ asistanı (kopyala-yapıştır modu): hazır mesajı kopyala → seçilen yapay zekâ uygulamasında yapıştır.
 // Program önerisi geri yapıştırılınca doğrulanır, önizlenir ve onaylanırsa uygulanır.
-import { state, updateSettings } from '../store.js';
+import { state, updateSettings, setKV } from '../store.js';
 import { h, appendChildren, btn, card, segmented, toast, confirmSheet } from '../ui.js';
 import { AI_TARGETS, PROMPT_KINDS, buildPrompt, parseProgram } from '../ai.js';
 import { EX, PHASES, targetText } from '../program.js';
 import { today, startKey, currentAlerts, go } from '../context.js';
+import { extractJson } from '../extract-json.js';
+import { OUT, SLOTS, defaultPrefs, mealById, dayTotals, parseMealPlan } from '../mealplan.js';
+import { WEEKDAYS_SHORT } from '../util.js';
 
 let kind = 'review';
+
+/** Başka ekrandan asistanı belirli bir türle açmak için (ör. Yemek → "Claude'dan plan iste"). */
+export function setAssistantKind(k) {
+  if (PROMPT_KINDS[k]) kind = k;
+}
+
+/** Yapıştırılan cevap 7 günlük yemek planı mı (yoksa A/B antrenman programı mı)? */
+function looksLikeMealPlan(text) {
+  const { obj } = extractJson(text, (o) => o != null && typeof o === 'object');
+  if (!obj) return false;
+  if (Array.isArray(obj)) return true;
+  const inner = ['plan', 'mealPlan', 'meal_plan', 'yemek_plani'].map((k) => obj[k]).find((v) => v && typeof v === 'object');
+  const root = inner && !Array.isArray(inner) ? inner : obj;
+  const days = root.days ?? root.gunler ?? root['günler'] ?? (Array.isArray(inner) ? inner : null);
+  if (!days) return false;
+  if (Array.isArray(days)) return true;
+  return !('A' in days || 'B' in days || 'a' in days || 'b' in days);
+}
+
+function mealPlanPreview(p) {
+  const plan = { days: p.days, customMeals: p.customMeals };
+  const name = (v) => (v === OUT ? 'Dışarıda' : mealById(v, plan)?.name ?? '—');
+  return h('div', null,
+    p.note ? h('p', { class: 'pre', text: p.note }) : null,
+    h('ul', { class: 'rules' }, p.days.map((d, i) => h('li', {
+      text: `${WEEKDAYS_SHORT[i]}: ${SLOTS.filter((s) => d[s]).map((s) => name(d[s])).join(' · ')} — ~${dayTotals(d, plan).mid} g protein`,
+    }))),
+    Object.keys(p.customMeals).length ? h('p', { class: 'muted small', text: `${Object.keys(p.customMeals).length} yeni öğün tarifi eklenecek.` }) : null);
+}
 
 async function copyText(text) {
   try {
@@ -65,6 +97,27 @@ export function renderAssistant(root) {
   const result = h('div');
   const check = async () => {
     result.replaceChildren();
+    if (looksLikeMealPlan(answer.value)) {
+      let mp;
+      try { mp = parseMealPlan(answer.value); } catch (err) { result.append(h('p', { class: 'small pre', text: `⚠️ ${err.message}` })); return; }
+      result.append(
+        h('p', { class: 'ok', text: '✓ Yemek planı okundu. Önizleme:' }),
+        mealPlanPreview(mp),
+        btn('Bu yemek planını uygula', async () => {
+          if (!(await confirmSheet({ title: 'Yemek planını uygula', message: 'Haftalık yemek planı ve alışveriş listesi bununla değiştirilecek. Yemek → Tercihler\'den varsayılan plana her zaman dönebilirsin. Uygulansın mı?', confirmLabel: 'Uygula' }))) return;
+          await setKV('mealplan', {
+            prefs: { ...defaultPrefs(), ...(state.mealplan?.prefs ?? {}) },
+            days: mp.days,
+            customMeals: mp.customMeals,
+            source: 'ai',
+            note: mp.note,
+            updatedAt: new Date().toISOString(),
+          });
+          toast('Yeni yemek planı uygulandı ✓');
+          go('/yemek/plan');
+        }, 'primary block'));
+      return;
+    }
     let p;
     try { p = parseProgram(answer.value); } catch (err) { result.append(h('p', { class: 'small pre', text: `⚠️ ${err.message}` })); return; }
     const phase = p.phase ?? s.phase;
@@ -96,8 +149,8 @@ export function renderAssistant(root) {
         h('p', { class: 'muted small', text: 'Yalnızca bu metin paylaşılır: adın, e-postan ve fotoğrafların yoktur. Göndermeden önce düzenleyebilirsin.' }),
         preview)),
     card(
-      h('h2', { text: '2. Program önerisini uygula (isteğe bağlı)' }),
-      h('p', { class: 'muted small', text: '"Yeni program" istediysen cevabın tamamını buraya yapıştır; uygulama kontrol edip önizleme gösterir.' }),
+      h('h2', { text: '2. Öneriyi uygula (isteğe bağlı)' }),
+      h('p', { class: 'muted small', text: '"Program" ya da "Yemek" istediysen cevabın tamamını buraya yapıştır; uygulama türünü tanır, kontrol edip önizleme gösterir.' }),
       answer,
       btn('Kontrol et', check, 'block'),
       result),

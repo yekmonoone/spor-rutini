@@ -87,7 +87,9 @@ export function openDailyForm(date = dateKey()) {
         field('Kilo (kg)', weight, 'Sabah, tuvaletten sonra, aç'),
         field('Adım', steps),
         field('Uyku (saat)', sleep, 'Hedef 7,5+'),
-        field('Protein (g)', protein, 'Yaklaşık yeterli')),
+        field('Protein (g)', protein, rec.meals && Object.keys(rec.meals).length
+          ? `Öğünlerden gelen: ~${Object.values(rec.meals).reduce((a, m) => a + (m?.protein ?? 0), 0)} g`
+          : 'Yaklaşık yeterli')),
       h('div', { class: 'field' }, h('span', { class: 'label', text: 'Enerji / ruh hali (1–5)' }), energy),
       brisk,
       field('Not', note)),

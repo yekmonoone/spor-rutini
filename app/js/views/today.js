@@ -7,8 +7,28 @@ import { daysBetween, fmtDateLong, fmtNum, weekday } from '../util.js';
 import { today, startKey, currentAlerts, runAction, go } from '../context.js';
 import { openDailyForm, openPadelForm, openMeasureForm } from '../forms.js';
 import { startWorkout } from './active.js';
+import { OUT, SLOTS, SLOT_LABELS, mealById } from '../mealplan.js';
 
 const LEVEL_LABEL = { warn: 'Uyarı', info: 'Bilgi', success: 'Tamam' };
+
+function mealCard(t) {
+  const plan = state.mealplan;
+  if (!plan?.days) {
+    return h('section', { class: 'card' },
+      h('div', { class: 'card-head' }, h('h2', { text: '🍽️ Yemek planı' }), btn('Oluştur', () => go('/yemek'), 'small primary')),
+      h('p', { class: 'muted small', text: '2 öğün + ara öğün düzenine göre protein öncelikli haftalık plan ve alışveriş listesi.' }));
+  }
+  const day = plan.days[weekday(t)] ?? {};
+  const daily = state.daily[t] ?? {};
+  const eaten = daily.meals ?? {};
+  const p = state.profile ?? {};
+  const next = SLOTS.find((s) => day[s] && !eaten[s]);
+  const nextName = next ? (day[next] === OUT ? 'Dışarıda' : mealById(day[next], plan)?.name ?? '—') : null;
+  return h('section', { class: 'card' },
+    h('div', { class: 'card-head' }, h('h2', { text: '🍽️ Yemek' }), btn('Aç', () => go('/yemek'), 'small')),
+    h('p', null, h('strong', { text: `${daily.proteinG ?? 0} g` }), h('span', { class: 'muted', text: ` / ${p.proteinMin ?? '?'}–${p.proteinMax ?? '?'} g protein` })),
+    h('p', { class: 'muted small', text: nextName ? `Sıradaki: ${SLOT_LABELS[next]} — ${nextName}` : '✓ Bugünün planlı öğünleri tamam.' }));
+}
 
 function alertCard(a) {
   return h('article', { class: `alert ${a.level}` },
@@ -135,7 +155,7 @@ export function renderToday(root) {
         btn('Aç', () => go('/asistan'), 'small primary')),
       h('p', { class: 'muted small', text: 'Haftalık değerlendirme, yeni program ya da kendi sorun için hazır mesaj.' })));
   }
-  root.append(dailyCard(t), weekCard(t));
+  root.append(mealCard(t), dailyCard(t), weekCard(t));
   const tc = targetsCard();
   if (tc) root.append(tc);
   root.append(h('p', { class: 'muted small center disclaimer', text: 'Bu uygulama genel bilgi verir, tıbbi tavsiye değildir. Ağrı veya sağlık şikâyetinde bir hekime danış.' }));

@@ -4,7 +4,7 @@ import { idb } from './db.js';
 import { byDate, deepCopy, dateKey } from './util.js';
 import { validateBackup } from './backup.js';
 
-const KV_KEYS = ['profile', 'settings', 'meta', 'draft'];
+const KV_KEYS = ['profile', 'settings', 'meta', 'draft', 'mealplan', 'shopping'];
 const listeners = new Set();
 
 export const state = {
@@ -13,6 +13,8 @@ export const state = {
   settings: null,
   meta: null,
   draft: null,
+  mealplan: null,   // yemek planı { prefs, days, customMeals, source, note, updatedAt }
+  shopping: null,   // alışveriş işaretleri { cycle, checked, extra }
   workouts: [],
   padel: [],
   measurements: [],
@@ -53,6 +55,8 @@ function applyRaw(raw) {
   state.settings = defaultSettings();
   state.meta = defaultMeta();
   state.draft = null;
+  state.mealplan = null;
+  state.shopping = null;
   for (const { key, value } of raw?.kv ?? []) {
     if (key === 'settings') state.settings = { ...defaultSettings(), ...(value ?? {}) };
     else if (key === 'meta') state.meta = { ...defaultMeta(), ...(value ?? {}) };
