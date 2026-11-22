@@ -49,7 +49,7 @@ export function renderOnboarding(root) {
       h('div', { class: 'field' },
         h('span', { class: 'label', text: 'Şu anki ekipmanın' }),
         phase,
-        h('div', { class: 'hint', text: 'Bant ve mat gelene kadar "Ekipmansız" ile başla; sonra Ayarlar\'dan değiştirirsin.' }))),
+        h('div', { class: 'hint', text: 'İlk ~3 hafta "Ekipmansız" ile başla; dambıl seti ve kapı barfiks barı gelince Ayarlar\'dan "Dambıl"a geçersin.' }))),
     btn('Başla', begin, 'primary block big'),
     h('p', { class: 'center' }, h('button', { type: 'button', class: 'link', text: 'Başka cihazda kullanıyor musun? Eşitlemeyle giriş yap', onClick: () => go('/esitleme') })),
     h('p', { class: 'center' }, h('button', { type: 'button', class: 'link', text: 'Yeni telefon mu? Yedekten geri yükle', onClick: importBackupFlow })),

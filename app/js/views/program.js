@@ -62,7 +62,7 @@ export function renderProgram(root) {
       h('li', { text: 'Kas yanması normal; eklemde keskin ağrı olursa hareketi bırak.' }),
       h('li', { text: `Isınma: ${warmupFor(phase).join(', ')}.` }),
       h('li', { text: `Soğuma: ${COOLDOWN}.` })),
-    h('p', { class: 'muted small', text: 'Dönemi (ekipmansız / bant / dambıl) Ayarlar\'dan değiştirebilirsin.' })));
+    h('p', { class: 'muted small', text: 'Dönemi (ekipmansız / dambıl / bant) Ayarlar\'dan değiştirebilirsin.' })));
 
   const recent = state.workouts.filter(isStrength).slice(-5).reverse();
   root.append(card(

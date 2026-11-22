@@ -79,11 +79,13 @@ export async function editWorkout(rec) {
   go('/antrenman/aktif');
 }
 
+/** Seviye (varyant) ve direnç girişi. Dambıllı varyantlı harekette ikisi birlikte gösterilir (ör. Bulgar split squat + kg). */
 function loadControl(ex, e, persist) {
+  const parts = [];
   if (ex.variants) {
     const sel = h('select', { class: 'input', value: e.variant ?? ex.variants[0], onChange: (ev) => { e.variant = ev.target.value; persist(); } },
       ex.variants.map((v) => h('option', { value: v, text: v })));
-    return field('Seviye', sel);
+    parts.push(field('Seviye', sel));
   }
   if (ex.resist === 'band' || ex.resist === 'miniband') {
     const sel = h('select', {
@@ -91,14 +93,14 @@ function loadControl(ex, e, persist) {
       value: String(e.resistance?.level ?? 2),
       onChange: (ev) => { e.resistance = { kind: ex.resist, level: Number(ev.target.value) }; persist(); },
     }, BAND_LEVELS.map((l, i) => h('option', { value: String(i + 1), text: l })));
-    return field(ex.resist === 'miniband' ? 'Mini bant direnci' : 'Bant direnci', sel);
-  }
-  if (ex.resist === 'dumbbell') {
+    parts.push(field(ex.resist === 'miniband' ? 'Mini bant direnci' : 'Bant direnci', sel));
+  } else if (ex.resist === 'dumbbell') {
     const inp = numInput({ value: e.resistance?.kg ?? null, decimal: true, placeholder: 'kg' });
     inp.addEventListener('input', () => { e.resistance = { kind: 'dumbbell', kg: parseNum(inp.value) }; persist(); });
-    return field('Dambıl (kg, tek el)', inp);
+    parts.push(field('Dambıl (kg, tek el)', inp));
   }
-  return null;
+  if (!parts.length) return null;
+  return parts.length === 1 ? parts[0] : h('div', { class: 'grid2' }, parts);
 }
 
 function lastText(ex, last) {

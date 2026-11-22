@@ -217,23 +217,27 @@ export const EX = {
       'Dambılı göğsünün önünde dikey tut.',
       'Squat tekniğiyle in; dirsekler dizlerin içinden geçsin.',
       'Göğüs dik, topuklardan iterek kalk.',
+      'Hafif gelince plakaların çoğunu tek bara topla — tek ağır dambıl yeter.',
     ],
   },
   db_row: {
     name: 'Dambıl row', muscle: 'Sırt', unit: 'reps', side: 'kol', resist: 'dumbbell',
     how: [
-      'Bir el ve diz sandalye/sehpa üzerinde, sırt düz.',
+      'Bir el ve diz sandalye/kanepe üzerinde, sırt düz.',
       'Dambılı kalçana doğru çek; dirsek gövdeye yakın.',
       'Yavaşça indir.',
+      'Hafif gelince plakaları tek bara toplayıp daha ağır çek.',
     ],
   },
   db_rdl: {
     name: 'Romanian deadlift (RDL)', muscle: 'Arka bacak, kalça', unit: 'reps', resist: 'dumbbell',
+    variants: ['İki bacak', 'Tek bacak'], defaultVariant: 0,
     how: [
       'Dambıllar uyluk önünde, dizler hafif bükülü.',
       'Kalçanı geriye iterek gövdeyi öne eğ; sırt düz, dambıllar bacağa yakın.',
       'Arka bacakta gerginlik hissedince kalçayı ileri iterek kalk.',
       'Belini yuvarlama.',
+      'Tek bacak: dambıllar yetmeyince geç; bir bacak geriye uzanır, dengede zorlanırsan duvara dokun.',
     ],
   },
   db_lateral_raise: {
@@ -246,10 +250,12 @@ export const EX = {
   },
   db_reverse_lunge: {
     name: 'Dambıl geriye lunge', muscle: 'Bacak, kalça', unit: 'reps', side: 'bacak', resist: 'dumbbell',
+    variants: ['Geriye lunge', 'Bulgar split squat'], defaultVariant: 0,
     how: [
       'İki elde dambıl, kollar yanlarda.',
       'Geriye geniş adım, iki diz yaklaşık 90°.',
       'Öndeki topuktan iterek dön.',
+      'Bulgar split squat: dambıllar yetmeyince geç; arka ayağın üstü sandalyede, öndeki bacakla in-kalk.',
     ],
   },
   db_shoulder_press: {
@@ -261,20 +267,41 @@ export const EX = {
     ],
   },
   pullup: {
-    name: 'Barfiks / pulldown', muscle: 'Sırt (genişlik)', unit: 'reps', resist: 'none',
-    variants: ['Bant pulldown', 'Bant destekli barfiks', 'Barfiks'], defaultVariant: 0,
+    name: 'Barfiks', muscle: 'Sırt (genişlik)', unit: 'reps', resist: 'none',
+    variants: ['Sandalye destekli', 'Negatif (3–5 sn iniş)', 'Barfiks'], defaultVariant: 0,
     how: [
-      'Barfiks çubuğu yoksa bant pulldown yap.',
-      'Kürek kemiklerini aşağı-arkaya topla, göğsü çubuğa doğru götür.',
-      'Kontrollü in; sallanma.',
+      'Kapı barfiks barını avuçlar öne bakacak şekilde, omuz genişliğinden biraz geniş tut.',
+      'Sandalye destekli: ayaklarını önündeki sağlam sandalyeye koy; bacaklarla yalnızca gerektiği kadar yardım et.',
+      'Negatif: sandalyeyle üst noktaya çık, kollar düzleşene kadar 3–5 sn\'de yavaşça in.',
+      'Kürek kemiklerini aşağı-arkaya topla, göğsü çubuğa doğru götür; sallanma.',
     ],
   },
   db_glute_bridge: {
     name: 'Dambıllı glute bridge', muscle: 'Kalça', unit: 'reps', resist: 'dumbbell',
+    variants: ['Yerde köprü', 'Hip thrust (sırt kanepede)'], defaultVariant: 0,
     how: [
       'Dambılı kalça kemiklerinin üstüne yerleştir, iki elle tut.',
       'Topuklardan iterek kalk, tepede 1–2 sn sık.',
       'Yavaşça in.',
+      'Hip thrust: kürek kemikleri kanepe ya da sandalye kenarında; hareket açıklığı büyür, aynı dambıl daha zor gelir.',
+    ],
+  },
+  db_rear_delt_fly: {
+    name: 'Dambıl arka omuz açış', muscle: 'Arka omuz, duruş', unit: 'reps', resist: 'dumbbell',
+    how: [
+      'Kalçadan öne eğil, sırt düz (ya da göğsünü bir sandalye sırtına yasla).',
+      'Hafif dambılları, dirsekler hafif bükülü, yana doğru omuz hizasına aç.',
+      'Kürek kemiklerini sık, 1 sn tut, yavaşça indir.',
+      'Masa başı duruşuna karşı; ağırlık değil kontrol önemli.',
+    ],
+  },
+  db_wrist_ext: {
+    name: 'Dambıl bilek ekstansiyonu', muscle: 'Önkol (dirsek koruması)', unit: 'reps', resist: 'dumbbell',
+    how: [
+      'Otur, önkolunu dizine koy; avuç aşağı baksın, bilek dizden taşsın.',
+      'Boş dambıl barıyla (ya da 1 kg plakayla) başla; kaldırırken diğer elinle yardım et.',
+      'Yalnızca çalışan elle 3 sn\'de yavaşça indir (eksantrik).',
+      'Padelde dirsek ağrısını (tenisçi dirseği) önlemeye yardımcı olur; ağrı yapmamalı.',
     ],
   },
   hip_flexor_stretch: {

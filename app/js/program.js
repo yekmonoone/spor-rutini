@@ -4,12 +4,14 @@ import { daysBetween, fmtNum } from './util.js';
 
 export { EX };
 
+// Önerilen yol: ekipmansız (ilk ~3 hafta: teknik + alışkanlık) → dambıl (dambıl seti + kapı barfiks barı + mat).
+// Bant dönemi isteğe bağlı; dambıl programı bant gerektirmez.
 export const PHASES = {
-  bodyweight: { label: 'Ekipmansız', desc: 'Bant ve mat gelene kadar' },
-  band: { label: 'Bant + mat', desc: 'Direnç bandı dönemi' },
-  dumbbell: { label: 'Dambıl', desc: 'Bant yetmemeye başlayınca' },
+  bodyweight: { label: 'Ekipmansız', desc: 'Başlangıç: teknik ve alışkanlık' },
+  dumbbell: { label: 'Dambıl', desc: 'Dambıl seti + kapı barfiks barı + mat' },
+  band: { label: 'Bant + mat', desc: 'İsteğe bağlı: yalnızca bantla' },
 };
-export const PHASE_ORDER = ['bodyweight', 'band', 'dumbbell'];
+export const PHASE_ORDER = ['bodyweight', 'dumbbell', 'band'];
 
 export const BAND_LEVELS = ['Çok hafif', 'Hafif', 'Orta', 'Ağır', 'Çok ağır'];
 
@@ -32,9 +34,9 @@ export const PROGRAMS = {
   dumbbell: {
     A: [it('goblet_squat', 3, 8, 12), it('pushup', 3, 8, 12), it('db_row', 3, 8, 12), it('db_rdl', 3, 8, 12),
       it('plank', 3, 30, 60), it('db_lateral_raise', 2, 12, 15)],
-    B: [it('db_reverse_lunge', 3, 8, 12), it('db_shoulder_press', 3, 8, 12), it('pullup', 3, 6, 12), it('db_glute_bridge', 3, 10, 15),
-      it('side_plank', 3, 20, 40), it('band_face_pull', 2, 15), it('lateral_lunge', 2, 8, 8, PREP), it('squat_jump', 2, 8, 8, PREP),
-      it('band_wrist_ext', 2, 15, 15, PREP)],
+    B: [it('db_reverse_lunge', 3, 8, 12), it('db_shoulder_press', 3, 8, 12), it('pullup', 3, 5, 10), it('db_glute_bridge', 3, 10, 15),
+      it('side_plank', 3, 20, 40), it('db_rear_delt_fly', 2, 12, 15), it('lateral_lunge', 2, 8, 8, PREP), it('squat_jump', 2, 8, 8, PREP),
+      it('db_wrist_ext', 2, 15, 15, PREP)],
   },
 };
 
@@ -48,7 +50,8 @@ export function programFor(settings) {
 
 export function warmupFor(phase) {
   const list = ['Yerinde yürüyüş veya hafif tempo — 1 dk', 'Kol çevirme — 30 sn', 'Kalça çevirme — 30 sn', 'Yarım squat — 10 tekrar'];
-  if (phase !== 'bodyweight') list.push('Bant ile dış rotasyon — 2 × 12');
+  if (phase === 'band') list.push('Bant ile dış rotasyon — 2 × 12');
+  else if (phase === 'dumbbell') list.push('Yan yatarak dambılla dış rotasyon (1–2 kg) — her kol 2 × 12');
   return list;
 }
 
@@ -136,7 +139,11 @@ export function progressionHint(exId, entry) {
   if (!ex) return '';
   if (ex.variants && entry?.variant) {
     const i = ex.variants.indexOf(entry.variant);
-    if (i >= 0 && i < ex.variants.length - 1) return `Bir üst seviyeye geç: ${ex.variants[i + 1]}.`;
+    if (i >= 0 && i < ex.variants.length - 1) {
+      // Dambıllı harekette önce ağırlık; eldeki dambıl yetmeyince zor varyant (ör. Bulgar split squat).
+      if (ex.resist === 'dumbbell') return `Dambılı 1–2,5 kg artır; elindeki ağırlık yetmiyorsa bir üst seviyeye geç: ${ex.variants[i + 1]}.`;
+      return `Bir üst seviyeye geç: ${ex.variants[i + 1]}.`;
+    }
   }
   const r = entry?.resistance;
   if (r && (r.kind === 'band' || r.kind === 'miniband')) {

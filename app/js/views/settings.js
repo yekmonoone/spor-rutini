@@ -1,6 +1,6 @@
 // Ayarlar: profil ve hedefler, program, yedekleme, kurulum, yapay zekâ (3. aşama), veriler.
 import { state, setKV, updateSettings, wipeAll } from '../store.js';
-import { h, appendChildren, btn, card, field, segmented, selectEl, checkbox, confirmSheet, toast } from '../ui.js';
+import { h, appendChildren, btn, card, field, segmented, selectEl, checkbox, confirmSheet, toast, textInput } from '../ui.js';
 import { DAY_TYPES, PHASES, PHASE_ORDER } from '../program.js';
 import { WEEKDAYS, fmtDate } from '../util.js';
 import { APP_VERSION } from '../version.js';
@@ -90,6 +90,11 @@ export function renderSettings(root) {
   const rest = selectEl([45, 60, 75, 90, 120].map((v) => ({ value: v, label: `${v} sn` })), s.restSec, async (v) => { await updateSettings({ restSec: Number(v) }); saved(); });
   const sound = checkbox('Dinlenme bitince sesli uyarı', s.sound !== false);
   sound.input.addEventListener('change', async () => { await updateSettings({ sound: sound.input.checked }); saved(); });
+  const equip = textInput({ value: s.equipmentNote ?? '', placeholder: 'ör. 20 kg vidalı dambıl seti (el başına 10 kg), kapı barfiks barı, mat' });
+  equip.addEventListener('change', async () => {
+    await updateSettings({ equipmentNote: equip.value.trim().slice(0, 200) });
+    saved();
+  });
 
   const wipe = async () => {
     const ok1 = await confirmSheet({ title: 'Tüm verileri sil', message: 'Bu cihazdaki tüm kayıtlar, profil ve ayarlar silinecek. Geri alınamaz.\n\nEşitleme açıksa bu cihazda kapatılır; sunucudaki veriler silinmez.\n\nÖnce yedek almanı öneririm.', confirmLabel: 'Devam', danger: true });
@@ -111,7 +116,8 @@ export function renderSettings(root) {
       h('h2', { text: 'Program' }),
       field('Başlangıç tarihi', start, 'Hafta ve 4 haftalık blok sayımı bu tarihten başlar.'),
       h('div', { class: 'field' }, h('span', { class: 'label', text: 'Dönem (ekipman)' }), phase,
-        h('div', { class: 'hint', text: 'Bant yetmemeye başlayınca (genelde 6–10 hafta, önce bacaklarda) dambıla geç.' })),
+        h('div', { class: 'hint', text: 'İlk ~3 hafta ekipmansız. Düzenli gidince dambıl seti + kapı barfiks barı al ve "Dambıl"a geç; dambıl programı bant gerektirmez. Bant dönemi isteğe bağlı.' })),
+      field('Ekipmanım', equip, 'Yapay zekâ program önerirken bunun dışına çıkmaz. Boş bırakabilirsin.'),
       h('h3', { text: 'Haftalık takvim' }),
       schedule,
       h('div', { class: 'grid2' }, field('Set arası dinlenme', rest), h('div', { class: 'field end' }, sound))),

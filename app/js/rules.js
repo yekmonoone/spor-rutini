@@ -268,6 +268,29 @@ function progression({ workouts, settings }) {
   };
 }
 
+/**
+ * Ekipmansız dönemde 3 hafta düzenli gidildiyse (son 21 günde ≥6 kuvvet seansı) ya da bacaklar vücut ağırlığını
+ * aştıysa: ev setini (dambıl + kapı barfiks barı) alma zamanı. Para, alışkanlık oturduktan sonra harcanır.
+ */
+export const WEIGHTS_READY_SESSIONS = 6;
+
+function weightsReady({ workouts, settings, today, startKey }) {
+  if ((settings?.phase ?? 'bodyweight') !== 'bodyweight' || !startKey) return null;
+  const week = programWeek(startKey, today);
+  if (week < 3) return null;
+  const recent = workouts.filter((w) => isStrength(w) && w.date > addDays(today, -21) && w.date <= today).length;
+  const legs = ['squat', 'reverse_lunge'].some((id) => progressionDue(workouts, id));
+  if (recent < WEIGHTS_READY_SESSIONS && !legs) return null;
+  return {
+    id: `weights@${blockOf(week).block}`,
+    level: 'info',
+    icon: '🏋️',
+    title: recent >= WEIGHTS_READY_SESSIONS ? '3 haftadır düzenlisin: ev setini alma zamanı' : 'Bacaklar vücut ağırlığını aştı: ev seti zamanı',
+    body: 'Alınacaklar: 20 kg vidalı dambıl seti (el başına 10 kg) + kilitli kapı barfiks barı (kapı kasası 60–100 cm ve sağlam olmalı). Bant gerekmez.\nGelince Ayarlar → Dönem: Dambıl.',
+    action: { label: 'Ayarlar', to: '/ayarlar' },
+  };
+}
+
 function dumbbellTime({ workouts, settings, today }) {
   if (settings?.phase !== 'band') return null;
   const maxed = ['band_squat', 'band_glute_bridge'].filter((id) => {
@@ -390,7 +413,7 @@ function shoppingDay({ mealplan, shopping, today }) {
 
 export const RULES = [
   strengthThisWeek, longGap, lastWeek, proteinLow, sleepLow, weightRate, painRepeat, effortHard,
-  progression, dumbbellTime, weighIns, stepsLow, measurementsDue, testDue, blockDone, maintenanceSuggest,
+  progression, weightsReady, dumbbellTime, weighIns, stepsLow, measurementsDue, testDue, blockDone, maintenanceSuggest,
   checkinDue, shoppingDay, backupDue,
 ];
 

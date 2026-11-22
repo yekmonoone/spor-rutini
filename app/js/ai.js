@@ -188,6 +188,7 @@ function programSection(settings, startKey, today) {
   const schedule = settings.schedule.map((t, i) => `${WEEKDAYS[i]}: ${DAY_TYPES[t]?.label ?? t}`).join(', ');
   return [
     `- Dönem: ${PHASES[settings.phase]?.label} · Program haftası ${week} (blok ${block}, ${weekInBlock}/4)${prog.custom ? ' · şu an yapay zekâ önerisi özel program kullanılıyor' : ''}`,
+    ...(settings.equipmentNote?.trim() ? [`- Ekipman: ${settings.equipmentNote.trim()} — öneriler yalnızca bununla yapılabilmeli (yeni ekipman gerektirmesin).`] : []),
     `- Takvim: ${schedule}`,
     `- Gün A:\n${day('A')}`,
     `- Gün B:\n${day('B')}`,
@@ -260,6 +261,13 @@ function padelSection(state, today) {
   }).join('\n');
 }
 
+/** Dönemde bulunmayan ekipmanı gerektiren hareketler (dambıl dönemi bant gerektirmez; ekipmansızda ikisi de yok). */
+const MISSING_GEAR = { bodyweight: ['band', 'miniband', 'dumbbell'], dumbbell: ['band', 'miniband'] };
+export function unavailableExercises(phase) {
+  const missing = MISSING_GEAR[phase] ?? [];
+  return Object.entries(EX).filter(([, e]) => missing.includes(e.resist)).map(([id]) => id);
+}
+
 export function allowedExerciseList() {
   return Object.entries(EX).map(([id, e]) => `${id} (${e.name}${e.unit === 'sec' ? ', saniye' : e.unit === 'steps' ? ', adım' : ''})`).join(', ');
 }
@@ -287,6 +295,10 @@ export function buildPrompt(kind, { state, today, startKey, alerts = [], questio
       `- "ex" yalnızca şu kimliklerden biri olabilir (adını değil kimliğini yaz): ${allowedExerciseList()}`,
       '- Her gün 4–9 hareket; sets 1–5; min ≤ max; süreli hareketlerde min/max saniyedir.',
       `- Şu anki dönem "${state.settings.phase}"; ekipmanım değişmediyse aynı dönemi kullan.`,
+      ...(() => {
+        const banned = unavailableExercises(state.settings.phase);
+        return banned.length ? [`- Bu dönemde ekipmanım yok, şu kimlikleri kullanma: ${banned.join(', ')}`] : [];
+      })(),
       'Şu anki programım bu biçimde (örnek olarak kullan, değiştirerek ver):',
       '```json',
       JSON.stringify({ phase: state.settings.phase, note: 'kısa açıklama', ...(() => { const p = programFor(state.settings); return { A: p.A.map(({ ex, sets, min, max, prep }) => ({ ex, sets, min, max, ...(prep ? { prep } : {}) })), B: p.B.map(({ ex, sets, min, max, prep }) => ({ ex, sets, min, max, ...(prep ? { prep } : {}) })) }; })() }),

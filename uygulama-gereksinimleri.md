@@ -18,7 +18,7 @@ Verileri ve ilerlemeyi düzenli tutmak; isteğe bağlı AI ile konuşmak; uyarı
 | Varlık | Alanlar |
 |---|---|
 | Profil | boy, doğum yılı, cinsiyet, aktivite düzeyi, hedefler, kalori/protein hedefleri |
-| Program | gün şablonları (A/B), hareketler, hedef set/tekrar/RIR, dönem (band / dambıl) |
+| Program | gün şablonları (A/B), hareketler, hedef set/tekrar/RIR, dönem (ekipmansız / dambıl / isteğe bağlı bant), ekipman notu |
 | Hareket kütüphanesi | ad, kas grubu, açıklama/teknik notları, kolay/zor varyasyonlar |
 | Antrenman kaydı | tarih, gün tipi, her set için tekrar + direnç + RIR, süre, not |
 | Padel kaydı | tarih, süre, tip (ders/maç), his (1–5), ağrı (dirsek/omuz/diz/bel) |
@@ -37,7 +37,7 @@ Verileri ve ilerlemeyi düzenli tutmak; isteğe bağlı AI ile konuşmak; uyarı
   - Bir harekette 2 seans üst üste 3×15 → ilerleme önerisi.
   - Padel sonrası tekrarlayan dirsek/omuz ağrısı → dinlenme + uzmana danış uyarısı.
   - Bel ölçümü / fotoğraf zamanı.
-- **Program dönemleri:** 4 haftalık bloklar, blok sonu değerlendirme, band → dambıl geçişi.
+- **Program dönemleri:** 4 haftalık bloklar, blok sonu değerlendirme. 0.7.1: ekipmansız (ilk ~3 hafta) → dambıl (20 kg vidalı set + kapı barfiks barı + mat; bant gerektirmez: sandalye destekli → negatif → tam barfiks, arka omuz açış, yan yatarak dış rotasyon, eksantrik bilek ekstansiyonu, Bulgar split squat / tek bacak RDL / hip thrust varyantları). Bant dönemi isteğe bağlı.
 - **0.6.0 — düzenli takip için:**
   - Ölçüm temeli: trend kilo (7 günlük ortalama), bel/boy oranı (NICE NG246: < 0,5), 4 haftada bir güç testi (`measurements`, `kind: 'test'`), ilk 14 gün başlangıç değerlendirmesi.
   - Haftalık kontrol (`#/haftalik`, `meta.lastCheckin`) ve eğer–o zaman planları (`settings.ifThen`, en fazla 3; Singh 2024 alışkanlık medyanı ~59–66 gün, uygulama niyetleri d≈0,24–0,31).
