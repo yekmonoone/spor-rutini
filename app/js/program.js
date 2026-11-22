@@ -153,3 +153,15 @@ export function dayPlan(settings, weekdayIndex) {
   const type = settings?.schedule?.[weekdayIndex] ?? 'rest';
   return { type, ...(DAY_TYPES[type] ?? DAY_TYPES.rest) };
 }
+
+/** Tarihe göre plan: güne özel değişiklik (ör. gün sonu kontrolünde kaydırılan antrenman) varsa o geçerli. */
+export function dayPlanFor(settings, date, weekdayIndex) {
+  const o = settings?.scheduleOverrides?.[date];
+  if (o && DAY_TYPES[o]) return { type: o, ...DAY_TYPES[o], override: true };
+  return dayPlan(settings, weekdayIndex);
+}
+
+/** Kısa antrenman (~20 dk): günün ilk 4 ana hareketi, 2'şer set. */
+export function shortItems(items) {
+  return items.filter((i) => !i.prep).slice(0, 4).map((i) => ({ ...i, sets: 2 }));
+}

@@ -1,34 +1,18 @@
-// Bugün ekranı: günün planı, uyarılar, günlük kayıt, haftalık özet ve hedefler.
-import { state, dismissAlert } from '../store.js';
-import { h, btn, card, stat } from '../ui.js';
-import { WEEKLY_STRENGTH_TARGET, blockOf, dayPlan, nextStrengthDay, programWeek } from '../program.js';
+// Bugün ekranı: gün akışı. Saat sırasıyla yapılacaklar; her biri tek dokunuşla tamamlanır.
+// Sabah tartı + uyku → öğle öğünü → akşam yürüyüşü → antrenman/padel → akşam yemeği, ara öğün → gün sonu (adım + not).
+import { state, saveDaily, dismissAlert } from '../store.js';
+import { h, btn, numInput, toast } from '../ui.js';
+import { WEEKLY_STRENGTH_MIN, WEEKLY_STRENGTH_TARGET, blockOf, dayPlanFor, nextStrengthDay, programWeek } from '../program.js';
 import { isStrength, weekSummary } from '../stats.js';
-import { daysBetween, fmtDateLong, fmtNum, weekday } from '../util.js';
+import { addDays, daysBetween, fmtDateLong, fmtNum, parseNum, weekStart, weekday } from '../util.js';
 import { today, startKey, currentAlerts, runAction, go } from '../context.js';
 import { openDailyForm, openPadelForm, openMeasureForm } from '../forms.js';
 import { startWorkout } from './active.js';
-import { OUT, SLOTS, SLOT_LABELS, mealById } from '../mealplan.js';
+import { OUT, SLOT_LABELS, dayFor, mealById, mealNutrition } from '../mealplan.js';
+import { askWhatEaten, markEaten } from './meals.js';
+import { setAssistantKind } from './assistant.js';
 
 const LEVEL_LABEL = { warn: 'Uyarı', info: 'Bilgi', success: 'Tamam' };
-
-function mealCard(t) {
-  const plan = state.mealplan;
-  if (!plan?.days) {
-    return h('section', { class: 'card' },
-      h('div', { class: 'card-head' }, h('h2', { text: '🍽️ Yemek planı' }), btn('Oluştur', () => go('/yemek'), 'small primary')),
-      h('p', { class: 'muted small', text: '2 öğün + ara öğün düzenine göre protein öncelikli haftalık plan ve alışveriş listesi.' }));
-  }
-  const day = plan.days[weekday(t)] ?? {};
-  const daily = state.daily[t] ?? {};
-  const eaten = daily.meals ?? {};
-  const p = state.profile ?? {};
-  const next = SLOTS.find((s) => day[s] && !eaten[s]);
-  const nextName = next ? (day[next] === OUT ? 'Dışarıda' : mealById(day[next], plan)?.name ?? '—') : null;
-  return h('section', { class: 'card' },
-    h('div', { class: 'card-head' }, h('h2', { text: '🍽️ Yemek' }), btn('Aç', () => go('/yemek'), 'small')),
-    h('p', null, h('strong', { text: `${daily.proteinG ?? 0} g` }), h('span', { class: 'muted', text: ` / ${p.proteinMin ?? '?'}–${p.proteinMax ?? '?'} g protein` })),
-    h('p', { class: 'muted small', text: nextName ? `Sıradaki: ${SLOT_LABELS[next]} — ${nextName}` : '✓ Bugünün planlı öğünleri tamam.' }));
-}
 
 function alertCard(a) {
   return h('article', { class: `alert ${a.level}` },
@@ -42,93 +26,153 @@ function alertCard(a) {
     h('button', { type: 'button', class: 'icon-btn', 'aria-label': 'Bu uyarıyı gizle', text: '✕', onClick: () => dismissAlert(a.id) }));
 }
 
-function planCard(t) {
-  const plan = dayPlan(state.settings, weekday(t));
-  const doneToday = state.workouts.filter((w) => w.date === t && isStrength(w));
-  const padelToday = state.padel.filter((p) => p.date === t);
-  const next = nextStrengthDay(state.workouts);
-  const body = [];
+/** Akış satırı: simge (tamamlanınca ✓), başlık, saat ipucu ve içerik. */
+function row({ icon, title, time, done = false, cls = '' }, ...body) {
+  return h('div', { class: `flow-row${done ? ' done' : ''} ${cls}`.trim() },
+    h('div', { class: 'flow-icon', 'aria-hidden': 'true', text: done ? '✓' : icon }),
+    h('div', { class: 'flow-main' },
+      h('div', { class: 'flow-title' }, h('strong', { text: title }), time ? h('span', { class: 'muted small', text: ` · ${time}` }) : null),
+      body));
+}
 
-  const strengthPart = () => {
-    if (doneToday.length) {
-      const w = doneToday[doneToday.length - 1];
-      body.push(h('p', { class: 'ok', text: `✓ Bugünkü antrenman kaydedildi — Gün ${w.day}${w.durationMin ? `, ${w.durationMin} dk` : ''}` }));
-    } else if (state.draft) {
-      body.push(btn(`Gün ${state.draft.day} antrenmanına devam et`, () => go('/antrenman/aktif'), 'primary block'));
-    } else {
-      body.push(btn(`Antrenmana başla · Gün ${next}`, () => startWorkout(next), 'primary block'));
-    }
+function readNum(input, label, min, max, integer = false) {
+  const raw = input.value.trim();
+  if (!raw) return null;
+  const n = parseNum(raw);
+  if (n == null || n < min || n > max) throw new Error(`${label}: ${fmtNum(min, 0)}–${fmtNum(max, 0)} arasında olmalı.`);
+  return integer ? Math.round(n) : Math.round(n * 10) / 10;
+}
+
+function morningRow(t, r) {
+  const weight = numInput({ value: r.weight, decimal: true, placeholder: 'kilo', label: 'Kilo (kg)' });
+  const sleep = numInput({ value: r.sleepH, decimal: true, placeholder: 'uyku', label: 'Uyku (saat)' });
+  const save = async () => {
+    try {
+      await saveDaily(t, { weight: readNum(weight, 'Kilo', 30, 250), sleepH: readNum(sleep, 'Uyku', 0, 16) });
+      toast('Kaydedildi ✓');
+    } catch (err) { toast(err.message); }
   };
+  return row({ icon: '☀️', title: 'Sabah: tartı ve uyku', time: '07–09', done: r.weight != null },
+    h('div', { class: 'inline-inputs' },
+      h('label', null, h('span', { class: 'muted small', text: 'kg' }), weight),
+      h('label', null, h('span', { class: 'muted small', text: 'uyku (sa)' }), sleep),
+      btn('Kaydet', save, r.weight != null ? 'small' : 'small primary')),
+    h('p', { class: 'muted small', text: 'Tuvaletten sonra, aç karnına.' }));
+}
 
-  if (plan.type === 'strength') strengthPart();
-  if (plan.type === 'padel' || plan.type === 'flex') {
-    body.push(padelToday.length
-      ? h('p', { class: 'ok', text: `✓ Padel kaydedildi${padelToday[0].durationMin ? ` — ${padelToday[0].durationMin} dk` : ''}` })
-      : btn('Padel kaydı ekle', () => openPadelForm(), plan.type === 'padel' ? 'primary block' : 'block'));
+function mealRow(t, slot, plan, day, eaten, icon, time) {
+  const planned = day[slot];
+  const entry = eaten[slot];
+  if (!planned && !entry) return null;
+  const meal = planned && planned !== OUT ? mealById(planned, plan) : null;
+  let body;
+  if (entry) {
+    body = [h('p', { class: 'flow-text', text: `${entry.name} · ~${entry.protein} g protein` }),
+      h('div', { class: 'flow-actions' }, btn('Değiştir', () => askWhatEaten(t, slot, plan), 'small'), btn('Geri al', () => markEaten(t, slot, null), 'small ghost'))];
+  } else if (planned === OUT) {
+    body = [h('p', { class: 'flow-text muted', text: 'Dışarıda — yediğinde seç.' }),
+      h('div', { class: 'flow-actions' }, btn('Ne yedim?', () => askWhatEaten(t, slot, plan), 'small primary'))];
+  } else if (meal) {
+    body = [h('p', { class: 'flow-text', text: `${meal.name} · ~${mealNutrition(meal).mid} g protein` }),
+      h('div', { class: 'flow-actions' },
+        btn('Yedim ✓', () => markEaten(t, slot, meal), 'small primary'),
+        btn('Başka bir şey', () => askWhatEaten(t, slot, plan), 'small'))];
+  } else {
+    return null;
   }
-  if (plan.type === 'flex') strengthPart();
-  if (plan.type !== 'strength' && plan.type !== 'flex') {
-    if (doneToday.length) {
-      const w = doneToday[doneToday.length - 1];
-      body.push(h('p', { class: 'ok', text: `✓ Ekstra antrenman kaydedildi — Gün ${w.day}${w.durationMin ? `, ${w.durationMin} dk` : ''}` }));
-    } else {
-      body.push(h('button', { type: 'button', class: 'link', text: state.draft ? 'Devam eden antrenmana dön' : 'Bugün yine de antrenman yapacağım', onClick: () => (state.draft ? go('/antrenman/aktif') : startWorkout(next)) }));
-    }
+  return row({ icon, title: SLOT_LABELS[slot] ?? 'Plan dışı', time, done: !!entry }, body);
+}
+
+function walkRow(t, r) {
+  const set = (walked, brisk) => saveDaily(t, { walked, brisk }).then(() => toast(walked ? 'Yürüyüş kaydedildi ✓' : 'Geri alındı'));
+  return row({ icon: '🚶', title: 'Akşam yürüyüşü', time: '~1 saat', done: !!r.walked },
+    r.walked
+      ? h('div', { class: 'flow-actions' },
+        h('span', { class: 'flow-text', text: r.brisk ? 'Yapıldı · tempolu bölüm de vardı' : 'Yapıldı' }),
+        !r.brisk ? btn('Tempolu bölüm de vardı', () => set(true, true), 'small') : null,
+        btn('Geri al', () => set(false, false), 'small ghost'))
+      : h('div', { class: 'flow-actions' },
+        btn('Yaptım', () => set(true, false), 'small primary'),
+        btn('Tempolu yaptım', () => set(true, true), 'small')),
+    r.walked ? null : h('p', { class: 'muted small', text: '10–20 dk tempolu bölüm: konuşabilir ama şarkı söyleyemezsin.' }));
+}
+
+function strengthRemainingThisWeek(t) {
+  let n = 0;
+  for (let d = addDays(t, 1); d <= addDays(weekStart(t), 6); d = addDays(d, 1)) {
+    const p = dayPlanFor(state.settings, d, weekday(d));
+    if (p.type === 'strength' || p.type === 'flex') n++;
   }
-
-  return h('section', { class: 'card plan' },
-    h('div', { class: 'plan-head' },
-      h('span', { class: 'plan-icon', 'aria-hidden': 'true', text: plan.icon }),
-      h('div', null, h('p', { class: 'muted small', text: 'Bugünün planı' }), h('h2', { text: plan.label }))),
-    h('p', { class: 'muted', text: plan.tip }),
-    body);
+  return n;
 }
 
-function dailyCard(t) {
-  const r = state.daily[t];
-  const p = state.profile ?? {};
-  const v = (x, unit, digits = 1) => (x == null ? '–' : `${fmtNum(x, digits)}${unit}`);
-  return h('section', { class: 'card' },
-    h('div', { class: 'card-head' },
-      h('h2', { text: 'Bugünkü kayıt' }),
-      btn(r ? 'Düzenle' : 'Kaydet', () => openDailyForm(t), r ? 'small' : 'small primary')),
-    h('div', { class: 'stats' },
-      stat('Kilo', v(r?.weight, ' kg')),
-      stat('Adım', v(r?.steps, '', 0)),
-      stat('Uyku', v(r?.sleepH, ' sa')),
-      stat('Protein', v(r?.proteinG, ' g', 0), p.proteinMin ? `hedef ${p.proteinMin}–${p.proteinMax}` : null),
-      stat('Enerji', r?.energy ? `${r.energy}/5` : '–')),
-    h('div', { class: 'quick' },
-      btn('+ Padel', () => openPadelForm(), 'small'),
-      btn('+ Ölçüm', () => openMeasureForm(), 'small'),
-      btn('+ Başka gün', () => openDailyForm(), 'small ghost')));
+function workoutRow(t, r, plan) {
+  const done = state.workouts.filter((w) => w.date === t && isStrength(w));
+  const next = nextStrengthDay(state.workouts);
+  const planned = plan.type === 'strength' || plan.type === 'flex';
+  const title = planned ? `Antrenman · Gün ${next}` : 'Antrenman (bugün planda yok)';
+  const tag = plan.override ? ' (gün sonu kontrolünde değişti)' : '';
+  if (done.length) {
+    const w = done[done.length - 1];
+    return row({ icon: '💪', title: `Antrenman · Gün ${w.day}${w.short ? ' (kısa)' : ''}`, done: true },
+      h('p', { class: 'flow-text', text: `Kaydedildi${w.durationMin ? ` — ${w.durationMin} dk` : ''}` }));
+  }
+  if (state.draft) {
+    return row({ icon: '💪', title: `Antrenman · Gün ${state.draft.day}` },
+      h('div', { class: 'flow-actions' }, btn('Devam et', () => go('/antrenman/aktif'), 'small primary')));
+  }
+  if (r.workoutSkipped) {
+    const week = weekSummary(state, t).strength;
+    const left = strengthRemainingThisWeek(t);
+    const msg = week + left >= WEEKLY_STRENGTH_MIN
+      ? `Sorun değil. Bu hafta ${week} yapıldı, ${left} kuvvet günü daha planlı; en az ${WEEKLY_STRENGTH_MIN} hâlâ mümkün.`
+      : 'Sorun değil; kaçan gün telafi edilmez. Yürüyüşe devam, gelecek hafta plana dön.';
+    return row({ icon: '💪', title: `Antrenman: bugün olmadı${tag}`, done: true, cls: 'skipped' },
+      h('p', { class: 'flow-text muted', text: msg }),
+      h('div', { class: 'flow-actions' }, btn('Yine de yapacağım', () => saveDaily(t, { workoutSkipped: false }), 'small ghost')));
+  }
+  if (!planned) {
+    return row({ icon: '💪', title, cls: 'optional' },
+      h('div', { class: 'flow-actions' },
+        btn(`Yine de · Gün ${next}`, () => startWorkout(next), 'small'),
+        btn('Kısa (20 dk)', () => startWorkout(next, { short: true }), 'small ghost')));
+  }
+  return row({ icon: '💪', title: `${title}${tag}`, time: 'yürüyüşten sonra' },
+    h('div', { class: 'flow-actions' },
+      btn('Başla', () => startWorkout(next), 'small primary'),
+      btn('Kısa (20 dk)', () => startWorkout(next, { short: true }), 'small'),
+      btn('Bugün olmadı', async () => {
+        await saveDaily(t, { workoutSkipped: true });
+      }, 'small ghost')),
+    h('p', { class: 'muted small', text: 'Yatmadan en az 2 saat önce bitir.' }));
 }
 
-function weekCard(t) {
-  const s = weekSummary(state, t);
-  return h('section', { class: 'card' },
-    h('h2', { text: 'Bu hafta' }),
-    h('div', { class: 'stats' },
-      stat('Kuvvet', `${s.strength}/${WEEKLY_STRENGTH_TARGET}`, 'en az 2'),
-      stat('Padel', String(s.padel)),
-      stat('Tempolu yürüyüş', `${s.brisk}/2`),
-      stat('Tartı', String(s.weighIns), 'hedef 3+'),
-      stat('Ort. uyku', s.sleep == null ? '–' : `${fmtNum(s.sleep)} sa`),
-      stat('Ort. protein', s.protein == null ? '–' : `${fmtNum(s.protein, 0)} g`),
-      stat('Ort. adım', s.steps == null ? '–' : fmtNum(s.steps, 0))));
+function padelRow(t) {
+  const logged = state.padel.filter((p) => p.date === t);
+  return row({ icon: '🎾', title: 'Padel', done: logged.length > 0 },
+    logged.length
+      ? h('p', { class: 'flow-text', text: `Kaydedildi${logged[0].durationMin ? ` — ${logged[0].durationMin} dk` : ''}` })
+      : h('div', { class: 'flow-actions' }, btn('Padel kaydı ekle', () => openPadelForm(), 'small primary')),
+    logged.length ? null : h('p', { class: 'muted small', text: 'Maç öncesi 5–10 dk ısın; ilk haftalarda 60 dakikayı geçme.' }));
 }
 
-function targetsCard() {
-  const p = state.profile;
-  if (!p?.kcalMin) return null;
-  return h('section', { class: 'card subtle' },
-    h('h2', { text: 'Günlük hedefler' }),
-    h('ul', { class: 'rules' },
-      h('li', { text: `Kalori: ~${fmtNum(p.kcalMin, 0)}–${fmtNum(p.kcalMax, 0)} kcal` }),
-      h('li', { text: `Protein: ${p.proteinMin}–${p.proteinMax} g · her öğünde bir protein kaynağı` }),
-      h('li', { text: 'Sebze: öğle ve akşam birer porsiyon' }),
-      h('li', { text: 'Uyku 7,5+ saat · günde 7.000+ adım' }),
-      p.lossMinKg ? h('li', { text: `Hedef kilo kaybı: haftada ${fmtNum(p.lossMinKg)}–${fmtNum(p.lossMaxKg)} kg` }) : null));
+function eveningRow(t, r) {
+  const steps = numInput({ value: r.steps, placeholder: 'adım', label: 'Adım' });
+  const note = h('textarea', { class: 'input', rows: 2, placeholder: 'Gün notu (isteğe bağlı): ör. "Çiğköfte yedim, antrenmana vakit olmadı"', value: r.note ?? '' });
+  const save = async () => {
+    try {
+      await saveDaily(t, { steps: readNum(steps, 'Adım', 0, 100000, true), note: note.value.trim() });
+      toast('Kaydedildi ✓');
+    } catch (err) { toast(err.message); }
+  };
+  return row({ icon: '🌙', title: 'Gün sonu', time: 'yatmadan önce', done: r.steps != null },
+    h('div', { class: 'inline-inputs' }, h('label', null, h('span', { class: 'muted small', text: 'adım' }), steps)),
+    note,
+    h('div', { class: 'flow-actions' },
+      btn('Kaydet', save, r.steps != null ? 'small' : 'small primary'),
+      state.settings.aiEnabled
+        ? btn('🤖 Gün sonu kontrolü', async () => { await save(); setAssistantKind('day'); go('/asistan'); }, 'small')
+        : null));
 }
 
 export function renderToday(root) {
@@ -136,27 +180,71 @@ export function renderToday(root) {
   const sk = startKey();
   const week = programWeek(sk, t);
   const { block, weekInBlock } = blockOf(week);
-  const sub = week === 0
-    ? `Program ${daysBetween(t, sk)} gün sonra başlıyor`
-    : `Hafta ${week} · Blok ${block} (${weekInBlock}/4)`;
+  const sub = week === 0 ? `Program ${daysBetween(t, sk)} gün sonra başlıyor` : `Hafta ${week} · Blok ${block} (${weekInBlock}/4)`;
+  const r = state.daily[t] ?? {};
+  const plan = dayPlanFor(state.settings, t, weekday(t));
+  const mp = state.mealplan;
+  const mday = mp?.days ? dayFor(mp, t) : {};
+  const eaten = r.meals ?? {};
+  const p = state.profile ?? {};
 
   root.append(h('header', { class: 'page-head' },
     h('div', null,
       h('h1', { text: 'Bugün' }),
-      h('p', { class: 'muted', text: `${fmtDateLong(t)} · ${sub}` }))));
+      h('p', { class: 'muted', text: `${fmtDateLong(t)} · ${sub}` })),
+    h('span', { class: 'badge', text: `${plan.icon} ${plan.short}` })));
 
-  root.append(planCard(t));
-  const alerts = currentAlerts();
-  if (alerts.length) root.append(h('section', { class: 'alerts', 'aria-label': 'Uyarılar ve öneriler' }, alerts.map(alertCard)));
-  if (state.settings.aiEnabled) {
-    root.append(h('section', { class: 'card' },
-      h('div', { class: 'card-head' },
-        h('h2', { text: '🤖 Yapay zekâ asistanı' }),
-        btn('Aç', () => go('/asistan'), 'small primary')),
-      h('p', { class: 'muted small', text: 'Haftalık değerlendirme, yeni program ya da kendi sorun için hazır mesaj.' })));
+  const rows = [morningRow(t, r)];
+  if (mp?.days) {
+    rows.push(mealRow(t, 'first', mp, mday, eaten, '🍽️', null));
+  } else {
+    rows.push(row({ icon: '🍽️', title: 'Yemek planı yok' },
+      h('div', { class: 'flow-actions' }, btn('Plan oluştur', () => go('/yemek'), 'small primary'))));
   }
-  root.append(mealCard(t), dailyCard(t), weekCard(t));
-  const tc = targetsCard();
-  if (tc) root.append(tc);
+  rows.push(walkRow(t, r));
+  if (plan.type === 'padel' || plan.type === 'flex') rows.push(padelRow(t));
+  rows.push(workoutRow(t, r, plan));
+  if (mp?.days) {
+    rows.push(mealRow(t, 'dinner', mp, mday, eaten, '🍽️', null));
+    for (const s of ['snack1', 'snack2', ...Object.keys(eaten).filter((k) => k.startsWith('extra'))]) rows.push(mealRow(t, s, mp, mday, eaten, '🥛', null));
+    rows.push(row({ icon: '➕', title: 'Plan dışı bir şey yedim', cls: 'optional' },
+      h('div', { class: 'flow-actions' }, btn('Ekle', () => {
+        const free = ['extra1', 'extra2', 'extra3', 'extra4'].find((s) => !eaten[s]) ?? 'extra4';
+        askWhatEaten(t, free, mp);
+      }, 'small'))));
+  }
+  rows.push(eveningRow(t, r));
+  root.append(h('section', { class: 'card flow' }, rows));
+
+  // Protein
+  if (p.proteinMin) {
+    const protein = r.proteinG ?? 0;
+    root.append(h('div', { class: 'flow-protein' },
+      h('span', { class: 'small', text: `Protein: ${protein} / ${p.proteinMin}–${p.proteinMax} g` }),
+      h('div', { class: 'meter' }, h('div', { class: 'meter-fill', style: { width: `${Math.min(100, Math.round((protein / (p.proteinMax || 1)) * 100))}%` } }))));
+  }
+
+  // Uyarılar: en önemli ikisi, gerisi katlanmış
+  const alerts = currentAlerts();
+  if (alerts.length) {
+    root.append(h('section', { class: 'alerts', 'aria-label': 'Uyarılar ve öneriler' }, alerts.slice(0, 2).map(alertCard)));
+    if (alerts.length > 2) {
+      root.append(h('details', { class: 'more-alerts' },
+        h('summary', { text: `Diğer uyarılar (${alerts.length - 2})` }),
+        h('div', { class: 'alerts' }, alerts.slice(2).map(alertCard))));
+    }
+  }
+
+  // Haftalık özet — tek satır
+  const s = weekSummary(state, t);
+  const wk = weekStart(t);
+  const walks = Object.values(state.daily).filter((d) => d.date >= wk && d.date <= addDays(wk, 6) && d.walked).length;
+  root.append(h('p', { class: 'muted small week-line', text: `Bu hafta: 💪 ${s.strength}/${WEEKLY_STRENGTH_TARGET} kuvvet · 🎾 ${s.padel} padel · 🚶 ${walks} yürüyüş · ⚖️ ${s.weighIns} tartı${s.sleep != null ? ` · 😴 ${fmtNum(s.sleep)} sa` : ''}` }));
+
+  root.append(h('div', { class: 'quick' },
+    btn('+ Padel', () => openPadelForm(), 'small'),
+    btn('+ Ölçüm', () => openMeasureForm(), 'small'),
+    btn('+ Başka gün', () => openDailyForm(), 'small ghost'),
+    state.settings.aiEnabled ? btn('🤖 Asistan', () => go('/asistan'), 'small ghost') : null));
   root.append(h('p', { class: 'muted small center disclaimer', text: 'Bu uygulama genel bilgi verir, tıbbi tavsiye değildir. Ağrı veya sağlık şikâyetinde bir hekime danış.' }));
 }

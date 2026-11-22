@@ -8,7 +8,7 @@ Plan ve gereksinimler: [spor-rutini-plani.md](spor-rutini-plani.md) · [uygulama
 
 | Ekran | İçerik |
 |---|---|
-| **Bugün** | Takvime göre günün planı, uyarılar/öneriler, günlük kayıt (kilo, adım, uyku, protein, enerji, tempolu yürüyüş), haftalık özet, hedefler |
+| **Bugün** | Gün akışı: sabah tartı + uyku → öğle öğünü → akşam yürüyüşü → antrenman (tam / kısa 20 dk / bugün olmadı) ya da padel → akşam yemeği, ara öğün, plan dışı yiyecek → gün sonu (adım + not, isteğe bağlı 🤖 gün sonu kontrolü). Altında en önemli 2 uyarı ve tek satır haftalık özet |
 | **Antrenman** | Dönem (ekipmansız / bant / dambıl), A–B günleri, hareketlerin nasıl yapıldığı, kurallar; aktif antrenmanda set set kayıt, RIR, dinlenme sayacı, plank için kronometre, geçen seferin değerleri |
 | **Yemek** | 2 öğün + ara öğün düzenine göre protein öncelikli haftalık plan; **Bugün** (Yedim ✓ → yaklaşık protein günlük kayda eklenir), **Plan** (gün gün düzenleme, protein/kalori özeti), **Alışveriş** (plandan otomatik, raf ömrü notlu, paylaşılabilir liste), **Rehber** (5 dk ev öğünleri, dışarıda/paket seçimleri, ara öğünler) |
 | **İlerleme** | Kilo (günlük + haftalık ortalama), bel çevresi, haftalık kuvvet/padel sayısı, hareket bazında ilerleme, haftalık tablo, 4 haftalık blok değerlendirmesi; **Geçmiş kayıtlar** (düzenle/sil) buradan açılır |
@@ -81,7 +81,8 @@ Telefon ve bilgisayar arasında Supabase üzerinden eşitleme: kurulum adımlar�
 
 ## Yapay zekâ
 
-- **3. aşama (kopyala-yapıştır modu, sürüm 0.3.0):** Ayarlar → Yapay zekâ asistanı. Uygulama verilerden hazır bir mesaj üretir (değerlendirme, program, yemek planı, soru), panoya kopyalar ve Claude/ChatGPT/Gemini'yi açar; ağ isteği yapmaz (`app/js/ai.js`). Yapay zekânın verdiği ```json cevabı geri yapıştırılınca türü (A/B programı ya da 7 günlük yemek planı) tanınır, doğrulanır ve onayla uygulanır (`settings.customProgram`, `mealplan`).
+- **3. aşama (kopyala-yapıştır modu, sürüm 0.3.0):** Ayarlar → Yapay zekâ asistanı. Uygulama verilerden hazır bir mesaj üretir (değerlendirme, program, yemek planı, soru), panoya kopyalar ve Claude/ChatGPT/Gemini'yi açar; ağ isteği yapmaz (`app/js/ai.js`). Yapay zekânın verdiği ```json cevabı geri yapıştırılınca türü (A/B programı, 7 günlük yemek planı ya da gün sonu değişiklikleri) tanınır, doğrulanır ve onayla uygulanır (`settings.customProgram`, `mealplan`).
+- **Gün sonu kontrolü (0.5.0):** plandan sapılan günlerde bugün ne olduğu, plan dışı yenenler ve gün notu Claude'a gider; Claude haftanın kalanı için **en fazla 3 küçük değişiklik** önerir. Uygulama sınırları denetler: yeni malzeme gerektiren öğün yok (yalnızca bu haftanın alışveriş listesiyle yapılabilenler ya da dışarıda), yeni ekipman/program yok (yalnızca gün türü değişir), yalnızca haftanın kalan günleri. Değişiklikler güne özeldir (`settings.scheduleOverrides`, `mealplan.overrides`), haftalık şablonu bozmaz.
 - **Sonra (isteğe bağlı):** API ile uygulama içi otomatik mod (anahtar Supabase Edge Function'da).
 
 > Bu uygulama genel bilgi verir, tıbbi tavsiye değildir.

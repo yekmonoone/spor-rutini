@@ -4,11 +4,13 @@
 import { EX, PHASES, DAY_TYPES, programFor, programWeek, blockOf, targetText, plannedSets, resistanceText } from './program.js';
 import { weeklyAverages, weeklySessions, exerciseHistory, trackedItems, valuesInRange } from './stats.js';
 import { ageFromBirthYear } from './targets.js';
-import { addDays, avg, fmtDate, fmtNum, weekStart, WEEKDAYS } from './util.js';
+import { addDays, avg, fmtDate, fmtNum, weekStart, weekday, WEEKDAYS } from './util.js';
 import { PAIN_AREAS } from './rules.js';
 import { extractJson } from './extract-json.js';
 import { MEALS, OUT_OPTIONS, TOOLS } from './foods.js';
-import { defaultPrefs, buildDefaultPlan, mealNutrition } from './mealplan.js';
+import { defaultPrefs, buildDefaultPlan, mealNutrition, dayFor, mealById, mealsWithoutNewGroceries, OUT, SLOTS, SLOT_LABELS } from './mealplan.js';
+import { dayPlanFor } from './program.js';
+import { isStrength } from './stats.js';
 
 export const AI_TARGETS = {
   claude: { label: 'Claude', url: 'https://claude.ai/new' },
@@ -21,8 +23,118 @@ export const PROMPT_KINDS = {
   review: { label: 'Değerlendir', icon: '📋' },
   program: { label: 'Program', icon: '🗓️' },
   meals: { label: 'Yemek', icon: '🍽️' },
+  day: { label: 'Gün sonu', icon: '🌙' },
   question: { label: 'Soru', icon: '💬' },
 };
+
+export const MAX_DAY_CHANGES = 3;
+const DAY_PLAN_TYPES = ['strength', 'walk', 'brisk', 'padel', 'rest'];
+
+/** Gün sonu kontrolünde değiştirilebilecek tarihler: bugünden sonra haftanın kalanı (Pazar ise önümüzdeki 7 gün). */
+export function changeableDates(today) {
+  const out = [];
+  const end = addDays(weekStart(today), 6);
+  for (let d = addDays(today, 1); d <= end; d = addDays(d, 1)) out.push(d);
+  if (!out.length) for (let i = 1; i <= 7; i++) out.push(addDays(today, i));
+  return out;
+}
+
+function mealName(v, plan) {
+  if (!v) return '—';
+  if (v === OUT) return 'dışarıda';
+  return mealById(v, plan)?.name ?? v;
+}
+
+function todaySection(state, today) {
+  const r = state.daily[today] ?? {};
+  const plan = dayPlanFor(state.settings, today, weekday(today));
+  const w = state.workouts.filter((x) => x.date === today && isStrength(x)).pop();
+  const workout = w ? `yapıldı (Gün ${w.day}${w.short ? ', kısa' : ''})` : r.workoutSkipped ? 'yapılamadı' : 'kaydedilmedi';
+  const eaten = Object.entries(r.meals ?? {}).map(([slot, m]) => `${SLOT_LABELS[slot] ?? 'Ek'}: ${m.name}${m.free ? ' (plan dışı)' : ''} ~${m.protein} g`);
+  const p = state.profile ?? {};
+  return [
+    `- Planlanan gün: ${DAY_TYPES[plan.type]?.label ?? plan.type}. Antrenman: ${workout}. Yürüyüş: ${r.walked ? (r.brisk ? 'yapıldı (tempolu)' : 'yapıldı') : 'kaydedilmedi'}.`,
+    `- Yenenler: ${eaten.length ? eaten.join('; ') : 'kaydedilmedi'}.`,
+    `- Protein: ${r.proteinG ?? 0} g (hedef ${p.proteinMin ?? '?'}–${p.proteinMax ?? '?'} g). Uyku: ${r.sleepH ?? '–'} sa. Adım: ${r.steps ?? '–'}.`,
+    `- Notum: ${r.note?.trim() || '(yok)'}`,
+  ].join('\n');
+}
+
+function restOfWeekSection(state, today) {
+  const mp = state.mealplan;
+  return changeableDates(today).map((d) => {
+    const plan = dayPlanFor(state.settings, d, weekday(d));
+    const md = mp?.days ? dayFor(mp, d) : null;
+    const meals = md ? SLOTS.filter((s) => md[s]).map((s) => `${s}=${mealName(md[s], mp)}`).join(', ') : 'yemek planı yok';
+    return `- ${d} (${WEEKDAYS[weekday(d)]}): ${DAY_TYPES[plan.type]?.label ?? plan.type}; ${meals}`;
+  }).join('\n');
+}
+
+function dayTask(state, today) {
+  const dates = changeableDates(today);
+  const allowed = state.mealplan?.days ? mealsWithoutNewGroceries(state.mealplan) : { home: [], out: [] };
+  const example = { note: 'kısa açıklama', changes: [{ type: 'day', date: dates[0], plan: 'strength' }] };
+  if (state.mealplan?.days) example.changes.push({ type: 'meal', date: dates[0], slot: 'dinner', meal: allowed.home.find((m) => m.slot === 'dinner')?.id ?? OUT });
+  return [
+    'Görev: Bugün planımdan saptım (yukarıdaki "Bugün" bölümü ve notum). Haftanın kalanı için en fazla 3 küçük değişiklik öner; gerek yoksa değişiklik önerme. Önce 2–3 cümleyle açıkla.',
+    'Sınırlar (uygulama bunları kontrol eder, dışına çıkan öneri reddedilir):',
+    '- Yeni malzeme alınmayacak: yemek değişikliklerinde yalnızca aşağıdaki öğünleri ya da dışarıda seçeneklerini kullan.',
+    '- Yeni ekipman yok, program değişmeyecek: antrenman tarafında yalnızca günün türünü değiştir (ör. kaçan kuvvet gününü başka güne kaydır).',
+    `- Yalnızca şu tarihler değişebilir: ${dates.join(', ')}.`,
+    '- Haftada en az 2, ideal 3 kuvvet günü; arka arkaya 3 kuvvet günü koyma; padel olan güne kuvvet koyma.',
+    'En sonda TEK bir ```json bloğu ver (geçerli JSON: çift tırnak, yorum yok, sondaki virgül yok):',
+    '- "changes": en fazla 3 öğe. Gün türü için {"type": "day", "date": "YYYY-AA-GG", "plan": "strength|walk|brisk|padel|rest"}; öğün için {"type": "meal", "date": "YYYY-AA-GG", "slot": "first|dinner|snack1|snack2", "meal": "kimlik" | "out" | null}.',
+    `- Kullanılabilir ev öğünleri (bu haftanın alışveriş listesiyle yapılabilenler): ${allowed.home.map((m) => `${m.id} (${m.name}, ~${mealNutrition(m).mid} g)`).join('; ') || 'yok'}`,
+    `- Dışarıda seçenekleri: ${allowed.out.map((o) => o.id).join(', ')}`,
+    'Örnek biçim:',
+    '```json',
+    JSON.stringify(example),
+    '```',
+  ].join('\n');
+}
+
+/** Gün sonu cevabındaki değişiklikleri okur ve sınırları denetler. Hata varsa Türkçe mesajla fırlatır. */
+export function parseDayChanges(text, { today, mealplan }) {
+  const { found, obj } = extractJson(text, (o) => o != null && typeof o === 'object' && (Array.isArray(o) || 'changes' in o || 'degisiklikler' in o));
+  if (!found) throw new Error('Metinde değişiklik listesi bulunamadı. Cevaptaki ```json bloğunun tamamını yapıştır.');
+  if (!obj) throw new Error('Değişiklikler okunamadı: JSON bozuk. Yapay zekâdan aynı biçimde tekrar vermesini iste.');
+  const list = Array.isArray(obj) ? obj : obj.changes ?? obj.degisiklikler ?? [];
+  if (!Array.isArray(list)) throw new Error('"changes" bir liste olmalı.');
+  if (list.length > MAX_DAY_CHANGES) throw new Error(`En fazla ${MAX_DAY_CHANGES} değişiklik olabilir; yapay zekâ ${list.length} önerdi. Daha az değişiklik iste.`);
+  const dates = new Set(changeableDates(today));
+  const allowedMeals = mealplan?.days ? new Set(mealsWithoutNewGroceries(mealplan).home.map((m) => m.id)) : new Set();
+  const changes = list.map((c, i) => {
+    const n = i + 1;
+    if (!c || typeof c !== 'object') throw new Error(`${n}. değişiklik hatalı.`);
+    const date = String(c.date ?? c.tarih ?? '').trim();
+    if (!dates.has(date)) throw new Error(`${n}. değişiklik: ${date || 'tarih yok'} değiştirilemez (yalnızca ${[...dates][0]} – ${[...dates].pop()}).`);
+    const type = String(c.type ?? c.tur ?? '').toLowerCase();
+    if (type === 'day' || type === 'gun' || type === 'gün') {
+      const plan = String(c.plan ?? '').toLowerCase();
+      if (!DAY_PLAN_TYPES.includes(plan)) throw new Error(`${n}. değişiklik: "${plan}" geçerli bir gün türü değil (${DAY_PLAN_TYPES.join(', ')}).`);
+      return { type: 'day', date, plan };
+    }
+    if (type === 'meal' || type === 'ogun' || type === 'öğün') {
+      if (!mealplan?.days) throw new Error('Yemek planı olmadığı için öğün değiştirilemez.');
+      const slot = String(c.slot ?? '');
+      if (!SLOTS.includes(slot)) throw new Error(`${n}. değişiklik: "${slot}" geçerli bir öğün değil (${SLOTS.join(', ')}).`);
+      const v = c.meal ?? c.ogun ?? null;
+      if (v === null || v === '') return { type: 'meal', date, slot, meal: null };
+      const meal = String(v);
+      if (meal === OUT || OUT_OPTIONS[meal]) return { type: 'meal', date, slot, meal };
+      if (!allowedMeals.has(meal)) {
+        const known = mealById(meal, mealplan);
+        throw new Error(known
+          ? `${n}. değişiklik: "${known.name}" bu haftanın alışveriş listesinde olmayan malzeme gerektiriyor; yeni malzeme alınmayacak.`
+          : `${n}. değişiklik: "${meal}" adlı öğün yok.`);
+      }
+      return { type: 'meal', date, slot, meal };
+    }
+    throw new Error(`${n}. değişiklik: tür "day" ya da "meal" olmalı.`);
+  });
+  const note = obj.note ?? obj.not ?? '';
+  return { note: typeof note === 'string' ? note.slice(0, 500) : '', changes };
+}
 
 function mealsSection(state, today) {
   const plan = state.mealplan;
@@ -132,7 +244,7 @@ const SAFETY = [
 ].join('\n');
 
 /**
- * kind: 'review' | 'program' | 'meals' | 'question'
+ * kind: 'review' | 'program' | 'meals' | 'day' | 'question'
  * ctx: { state, today, startKey, alerts, question }
  */
 export function buildPrompt(kind, { state, today, startKey, alerts = [], question = '' }) {
@@ -173,6 +285,7 @@ export function buildPrompt(kind, { state, today, startKey, alerts = [], questio
         '```',
       ].join('\n');
     })(),
+    day: dayTask(state, today),
     question: `Sorum: ${question.trim() || '(buraya sorunu yaz)'}`,
   }[kind];
 
@@ -191,6 +304,7 @@ export function buildPrompt(kind, { state, today, startKey, alerts = [], questio
     '',
     `## Yemek düzeni\n${mealsSection(state, today)}`,
     '',
+    ...(kind === 'day' ? [`## Bugün\n${todaySection(state, today)}`, '', `## Haftanın kalanı (plan)\n${restOfWeekSection(state, today)}`, ''] : []),
     `## Uygulamanın uyarıları\n${alerts.length ? alerts.map((a) => `- ${a.title}`).join('\n') : '- Yok'}`,
     '',
     SAFETY,

@@ -626,3 +626,29 @@ th { color: var(--text-2); font-weight: 600; font-size: 13px; }
 .sug-list { display: flex; flex-direction: column; gap: 6px; }
 .sug { display: flex; justify-content: space-between; align-items: center; gap: 8px; padding: 6px 0; border-bottom: 1px solid var(--border); }
 .sug:last-child { border-bottom: 0; }
+
+/* ---------- Bugün: gün akışı ---------- */
+.card.flow { padding: 6px 12px; }
+.flow-row { display: grid; grid-template-columns: 34px 1fr; gap: 10px; padding: 12px 0; border-bottom: 1px solid var(--border); }
+.flow-row:last-child { border-bottom: 0; }
+.flow-icon {
+  width: 34px; height: 34px; border-radius: 50%;
+  display: flex; align-items: center; justify-content: center;
+  background: var(--surface-2); font-size: 17px;
+}
+.flow-row.done .flow-icon { background: var(--good); color: #fff; font-weight: 800; }
+.flow-row.done .flow-title strong { color: var(--text-2); }
+.flow-row.optional .flow-title strong { font-weight: 600; color: var(--text-2); }
+.flow-main { min-width: 0; }
+.flow-title { line-height: 34px; }
+.flow-text { margin: 2px 0 6px; font-size: 15px; }
+.flow-actions { display: flex; flex-wrap: wrap; gap: 6px; align-items: center; margin-top: 4px; }
+.inline-inputs { display: flex; gap: 8px; align-items: flex-end; flex-wrap: wrap; margin: 4px 0 6px; }
+.inline-inputs label { display: flex; flex-direction: column; gap: 2px; flex: 1 1 90px; min-width: 0; }
+.inline-inputs .btn { flex: 0 0 auto; }
+.flow .input { min-height: 40px; }
+.flow textarea.input { margin-bottom: 6px; }
+.flow-protein { margin: 0 4px 12px; }
+.more-alerts { margin: -4px 0 12px; }
+.more-alerts summary { cursor: pointer; color: var(--accent); font-weight: 600; font-size: 14px; min-height: 32px; display: flex; align-items: center; }
+.week-line { margin: 0 4px 10px; }

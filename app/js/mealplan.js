@@ -258,6 +258,51 @@ export function countShopping(groups, extra = [], checked = {}) {
   return { total: keys.length, done: keys.filter((k) => checked[k]).length };
 }
 
+/* ---------------- Güne özel değişiklikler ---------------- */
+
+/** O tarih için geçerli plan günü: haftalık şablon + o güne özel değişiklikler (overrides). */
+export function dayFor(plan, date) {
+  if (!plan?.days) return {};
+  return { ...(plan.days[weekday(date)] ?? {}), ...(plan.overrides?.[date] ?? {}) };
+}
+
+/** Güne özel değişiklik ekler (value undefined → kaldırır); 14 günden eski değişiklikleri temizler. */
+export function withOverride(plan, date, slot, value, today = date) {
+  const overrides = {};
+  const cutoff = addDays(today, -14);
+  for (const [d, v] of Object.entries(plan?.overrides ?? {})) if (d >= cutoff) overrides[d] = { ...v };
+  const day = { ...(overrides[date] ?? {}) };
+  if (value === undefined) delete day[slot]; else day[slot] = value;
+  if (Object.keys(day).length) overrides[date] = day; else delete overrides[date];
+  return { ...plan, overrides };
+}
+
+/** Listede olmayan yiyecek için kayıt (protein kabaca seçilir). */
+export const FREE_PROTEIN = [
+  { value: 8, label: 'Az (~8 g)', hint: 'çiğköfte, simit, makarna, tatlı' },
+  { value: 20, label: 'Orta (~20 g)', hint: 'tost, mantı, pizza, kumpir' },
+  { value: 35, label: 'Çok (~35 g)', hint: 'ızgara et/tavuk porsiyonu' },
+];
+
+export function freeEntry(name, protein, place = 'out') {
+  return { id: 'free', name: String(name).trim().slice(0, 60), protein: Math.round(protein), place, free: true };
+}
+
+/**
+ * Bu haftanın alışveriş listesiyle yapılabilen öğünler (yeni malzeme gerektirmeyenler) + dışarıda seçenekleri.
+ * Gün sonu yapay zekâ değişiklikleri yalnızca bunlardan seçebilir.
+ */
+export function mealsWithoutNewGroceries(plan) {
+  const have = new Set(shoppingList(plan).flatMap((g) => g.items.map((i) => i.key)));
+  const inPlan = new Set((plan?.days ?? []).flatMap((d) => SLOTS.map((s) => d?.[s])).filter(Boolean));
+  const ok = [];
+  for (const m of allHomeMeals(plan)) {
+    const lib = Array.isArray(m.ingredients?.[0]);
+    if (inPlan.has(m.id) || (lib && m.ingredients.every(([id]) => have.has(id)))) ok.push(m);
+  }
+  return { home: ok, out: Object.values(OUT_OPTIONS) };
+}
+
 /* ---------------- "Yedim" ve öneriler ---------------- */
 
 export function eatenEntry(meal) {

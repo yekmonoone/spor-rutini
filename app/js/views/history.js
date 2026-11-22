@@ -69,7 +69,9 @@ function entryRow(entry) {
       r.sleepH != null ? `${fmtNum(r.sleepH)} sa uyku` : null,
       r.proteinG != null ? `${fmtNum(r.proteinG, 0)} g protein` : null,
       r.energy ? `enerji ${r.energy}/5` : null,
-      r.brisk ? 'tempolu yürüyüş' : null,
+      r.brisk ? 'tempolu yürüyüş' : r.walked ? 'yürüyüş' : null,
+      r.workoutSkipped ? 'antrenman olmadı' : null,
+      r.meals && Object.keys(r.meals).length ? `${Object.keys(r.meals).length} öğün işaretli` : null,
     ].filter(Boolean).join(' · ') || (r.note ? 'not' : '—');
     onClick = () => openDailyForm(r.date);
   } else if (entry.kind === 'padel') {

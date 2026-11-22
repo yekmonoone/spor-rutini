@@ -176,6 +176,12 @@ export const OUT_OPTIONS = Object.fromEntries([
   out('burger', ['first', 'dinner'], 'Tek köfteli burger (patatessiz) + ayran', [25, 30], [500, 700], 'Patates ve kola yerine salata, ayran ya da şekersiz içecek.'),
   out('disarida_kahvalti', ['first'], 'Dışarıda kahvaltı: menemen/omlet + peynir + 1–2 dilim ekmek', [25, 35], [500, 700], 'Börek, poğaça, simit yerine yumurta ve peynir; çay şekersiz.'),
   out('simit_ayran', ['first'], 'Simit + ayran (kaçamak)', [12, 16], [400, 480], 'Protein düşük: yanına yumurta ya da peynir ekle, günün kalanında telafi et.'),
+  out('cigkofte', ['first', 'dinner', 'snack'], 'Çiğköfte dürüm + ayran', [10, 15], [400, 550], 'Protein düşük: yanına ayran; günün kalanında protein ağırlıklı ye.'),
+  out('manti', ['first', 'dinner'], 'Mantı (porsiyon, yoğurtlu)', [20, 28], [600, 800], 'Yoğurdu bol, tereyağlı sosu az iste.'),
+  out('kumpir', ['first', 'dinner'], 'Kumpir', [15, 25], [700, 950], 'Malzemeleri az ve peynirli seç; kaloriyi yüksek düşün.'),
+  out('pizza', ['first', 'dinner'], 'Pizza (2 dilim)', [20, 25], [500, 650], 'İnce hamur, tavuklu ya da sucuklu yerine sebzeli; yanına salata.'),
+  out('tost', ['first', 'snack'], 'Kaşarlı / karışık tost + ayran', [18, 25], [400, 550], 'Ayranla protein artar.'),
+  out('tantuni', ['first', 'dinner'], 'Tantuni (dürüm)', [25, 35], [450, 650], 'Yarım ekmek yerine dürüm; yanına ayran.'),
 ].map((o) => [o.id, o]));
 
 /** Planda "dışarıda" (henüz seçilmemiş) slotlar için kullanılan tahmini aralıklar. */

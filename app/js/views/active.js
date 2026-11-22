@@ -2,7 +2,7 @@
 import { state, setKV, saveRecord } from '../store.js';
 import { h, appendChildren, btn, confirmSheet, toast, numInput, field, checkbox } from '../ui.js';
 import {
-  EX, programFor, BAND_LEVELS, warmupFor, COOLDOWN, plannedSets, programWeek, rirTarget,
+  EX, programFor, shortItems, BAND_LEVELS, warmupFor, COOLDOWN, plannedSets, programWeek, rirTarget,
   defaultResistance, resistanceText, targetText, progressionHint, unitSuffix,
 } from '../program.js';
 import { lastPerformance, progressionDue } from '../stats.js';
@@ -45,11 +45,13 @@ async function confirmReplaceDraft() {
   return ok;
 }
 
-export async function startWorkout(day) {
+/** short: true → ~20 dk'lık kısa antrenman (ilk 4 ana hareket, 2'şer set). */
+export async function startWorkout(day, { short = false } = {}) {
   if (!(await confirmReplaceDraft())) return;
   const t = today();
   const week = Math.max(1, programWeek(startKey(), t));
   const phase = state.settings.phase;
+  const items = programFor(state.settings)[day];
   const d = {
     id: uid(),
     date: t,
@@ -57,10 +59,11 @@ export async function startWorkout(day) {
     day,
     phase,
     programWeek: week,
+    short,
     warmup: warmupFor(phase).map(() => false),
     cooldownDone: false,
     note: '',
-    exercises: programFor(state.settings)[day].map((item) => buildExercise(item, week, state.workouts)),
+    exercises: (short ? shortItems(items) : items).map((item) => buildExercise(item, short ? 2 : week, state.workouts)),
   };
   await setKV('draft', d, { silent: true });
   go('/antrenman/aktif');
@@ -258,7 +261,7 @@ export function renderActive(root) {
   appendChildren(root, [
     h('header', { class: 'page-head' },
       h('div', null,
-        h('h1', { text: `Gün ${d.day}` }),
+        h('h1', { text: `Gün ${d.day}${d.short ? ' · kısa (~20 dk)' : ''}` }),
         h('p', { class: 'muted', text: `${fmtDate(d.date, { day: 'numeric', month: 'long' })} · Hafta ${d.programWeek ?? 1}` })),
       elapsed),
     h('div', { class: 'notice' }, h('strong', { text: rir.label }), h('span', { text: ` — ${rir.hint}` })),

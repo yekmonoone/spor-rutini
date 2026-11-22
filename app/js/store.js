@@ -32,6 +32,7 @@ export function defaultSettings() {
     customProgram: null,          // yapay zekâdan aktarılan program { phase, A, B, note, appliedAt }
     // Pazartesi → Pazar
     schedule: ['strength', 'brisk', 'strength', 'strength', 'walk', 'padel', 'rest'],
+    scheduleOverrides: {},        // güne özel gün türü (gün sonu kontrolü): { 'YYYY-AA-GG': 'strength' | 'walk' | ... }
   };
 }
 

@@ -34,7 +34,7 @@ export function openDailyForm(date = dateKey()) {
   const steps = numInput({ value: rec.steps, placeholder: 'ör. 8000' });
   const sleep = numInput({ value: rec.sleepH, decimal: true, placeholder: 'ör. 7,5' });
   const protein = numInput({ value: rec.proteinG, placeholder: p.proteinMin ? `hedef ${p.proteinMin}–${p.proteinMax}` : 'gram' });
-  const energy = segmented(SCALE, rec.energy ?? null);
+  const walked = checkbox('Yürüyüş yaptım', !!rec.walked);
   const brisk = checkbox('Yürüyüşte tempolu bölüm yaptım (10–20 dk)', !!rec.brisk);
   const note = textInput({ value: rec.note ?? '', placeholder: 'İsteğe bağlı not', multiline: true });
 
@@ -52,11 +52,11 @@ export function openDailyForm(date = dateKey()) {
         steps: readNum(steps, { label: 'Adım', min: 0, max: 100000, integer: true }),
         sleepH: readNum(sleep, { label: 'Uyku', min: 0, max: 16 }),
         proteinG: readNum(protein, { label: 'Protein', min: 0, max: 400, integer: true }),
-        energy: energy.getValue(),
+        walked: walked.input.checked || brisk.input.checked,
         brisk: brisk.input.checked,
         note: note.value.trim(),
       };
-      const empty = values.weight == null && values.steps == null && values.sleepH == null && values.proteinG == null && values.energy == null && !values.brisk && !values.note;
+      const empty = values.weight == null && values.steps == null && values.sleepH == null && values.proteinG == null && !values.walked && !values.note;
       if (empty && !state.daily[date]) { sheet.close(); return; }
       await saveDaily(date, values);
       sheet.close();
@@ -90,7 +90,7 @@ export function openDailyForm(date = dateKey()) {
         field('Protein (g)', protein, rec.meals && Object.keys(rec.meals).length
           ? `Öğünlerden gelen: ~${Object.values(rec.meals).reduce((a, m) => a + (m?.protein ?? 0), 0)} g`
           : 'Yaklaşık yeterli')),
-      h('div', { class: 'field' }, h('span', { class: 'label', text: 'Enerji / ruh hali (1–5)' }), energy),
+      walked,
       brisk,
       field('Not', note)),
     actions,

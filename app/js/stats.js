@@ -1,5 +1,6 @@
 // Hesaplamalar: haftalık ortalamalar, seans sayıları, hareket geçmişi, ilerleme ve blok özeti.
-// Günlük kayıt alanları: weight (kg), steps, sleepH (saat), proteinG (g), energy (1–5), brisk (bool)
+// Günlük kayıt alanları: weight (kg), steps, sleepH (saat), proteinG (g), walked/brisk (bool), workoutSkipped (bool),
+// meals ({ slot: { id, name, protein, place } }), note. (energy eski kayıtlarda kalabilir.)
 import { addDays, avg, weekStart } from './util.js';
 import { EX, PROGRAMS, WEEKLY_STRENGTH_TARGET } from './program.js';
 

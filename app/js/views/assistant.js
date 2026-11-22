@@ -2,18 +2,51 @@
 // Program önerisi geri yapıştırılınca doğrulanır, önizlenir ve onaylanırsa uygulanır.
 import { state, updateSettings, setKV } from '../store.js';
 import { h, appendChildren, btn, card, segmented, toast, confirmSheet } from '../ui.js';
-import { AI_TARGETS, PROMPT_KINDS, buildPrompt, parseProgram } from '../ai.js';
-import { EX, PHASES, targetText } from '../program.js';
+import { AI_TARGETS, PROMPT_KINDS, buildPrompt, parseProgram, parseDayChanges } from '../ai.js';
+import { EX, PHASES, DAY_TYPES, targetText } from '../program.js';
 import { today, startKey, currentAlerts, go } from '../context.js';
 import { extractJson } from '../extract-json.js';
-import { OUT, SLOTS, defaultPrefs, mealById, dayTotals, parseMealPlan } from '../mealplan.js';
-import { WEEKDAYS_SHORT } from '../util.js';
+import { OUT, SLOTS, SLOT_LABELS, defaultPrefs, mealById, dayTotals, parseMealPlan, withOverride } from '../mealplan.js';
+import { WEEKDAYS_SHORT, addDays, fmtDate } from '../util.js';
 
 let kind = 'review';
 
 /** Başka ekrandan asistanı belirli bir türle açmak için (ör. Yemek → "Claude'dan plan iste"). */
 export function setAssistantKind(k) {
   if (PROMPT_KINDS[k]) kind = k;
+}
+
+/** Gün sonu cevabı mı ({ "changes": [...] })? */
+function looksLikeDayChanges(text) {
+  const { obj } = extractJson(text, (o) => o != null && typeof o === 'object' && !Array.isArray(o) && ('changes' in o || 'degisiklikler' in o));
+  return !!obj;
+}
+
+function dayChangesPreview(res, plan) {
+  const line = (c) => {
+    const when = `${fmtDate(c.date, { weekday: 'short', day: 'numeric', month: 'short' })}`;
+    if (c.type === 'day') return `${when}: gün → ${DAY_TYPES[c.plan]?.label ?? c.plan}`;
+    const name = c.meal === null ? 'boş' : c.meal === OUT ? 'dışarıda' : mealById(c.meal, plan)?.name ?? c.meal;
+    return `${when} · ${SLOT_LABELS[c.slot]}: ${name}`;
+  };
+  return h('div', null,
+    res.note ? h('p', { class: 'pre', text: res.note }) : null,
+    res.changes.length
+      ? h('ul', { class: 'rules' }, res.changes.map((c) => h('li', { text: line(c) })))
+      : h('p', { class: 'muted', text: 'Değişiklik önerilmedi — plan aynen devam.' }));
+}
+
+async function applyDayChanges(res) {
+  const t = today();
+  const cutoff = addDays(t, -14);
+  const overrides = Object.fromEntries(Object.entries(state.settings.scheduleOverrides ?? {}).filter(([d]) => d >= cutoff));
+  let mp = state.mealplan;
+  for (const c of res.changes) {
+    if (c.type === 'day') overrides[c.date] = c.plan;
+    else mp = withOverride(mp, c.date, c.slot, c.meal, t);
+  }
+  await updateSettings({ scheduleOverrides: overrides });
+  if (mp && mp !== state.mealplan) await setKV('mealplan', { ...mp, updatedAt: new Date().toISOString() });
 }
 
 /** Yapıştırılan cevap 7 günlük yemek planı mı (yoksa A/B antrenman programı mı)? */
@@ -97,6 +130,19 @@ export function renderAssistant(root) {
   const result = h('div');
   const check = async () => {
     result.replaceChildren();
+    if (looksLikeDayChanges(answer.value)) {
+      let res;
+      try { res = parseDayChanges(answer.value, { today: today(), mealplan: state.mealplan }); } catch (err) { result.append(h('p', { class: 'small pre', text: `⚠️ ${err.message}` })); return; }
+      result.append(
+        h('p', { class: 'ok', text: '✓ Gün sonu önerisi okundu (yeni malzeme ve ekipman yok):' }),
+        dayChangesPreview(res, state.mealplan),
+        res.changes.length ? btn('Değişiklikleri uygula', async () => {
+          await applyDayChanges(res);
+          toast('Değişiklikler uygulandı ✓');
+          go('/bugun');
+        }, 'primary block') : null);
+      return;
+    }
     if (looksLikeMealPlan(answer.value)) {
       let mp;
       try { mp = parseMealPlan(answer.value); } catch (err) { result.append(h('p', { class: 'small pre', text: `⚠️ ${err.message}` })); return; }
@@ -150,7 +196,7 @@ export function renderAssistant(root) {
         preview)),
     card(
       h('h2', { text: '2. Öneriyi uygula (isteğe bağlı)' }),
-      h('p', { class: 'muted small', text: '"Program" ya da "Yemek" istediysen cevabın tamamını buraya yapıştır; uygulama türünü tanır, kontrol edip önizleme gösterir.' }),
+      h('p', { class: 'muted small', text: '"Program", "Yemek" ya da "Gün sonu" sorduysan cevabın tamamını buraya yapıştır; uygulama türünü tanır, kontrol edip önizleme gösterir.' }),
       answer,
       btn('Kontrol et', check, 'block'),
       result),

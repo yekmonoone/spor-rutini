@@ -5,9 +5,9 @@ import { INGREDIENTS, MEALS, OUT_OPTIONS, TOOLS, EAT_OUT_RULES, KCAL_FILLERS } f
 import {
   OUT, SLOTS, SLOT_LABELS, SLOT_KIND, KIND_LABELS, defaultPrefs, mealById, mealNutrition, slotNutrition, dayTotals,
   buildDefaultPlan, fillGaps, kcalGap, choicesFor, shoppingList, shoppingText, shoppingCycle, countShopping,
-  eatenEntry, applyMealToDaily, suggest, toolsOk, qtyText,
+  eatenEntry, applyMealToDaily, suggest, toolsOk, qtyText, dayFor, FREE_PROTEIN, freeEntry, withOverride,
 } from '../mealplan.js';
-import { WEEKDAYS, WEEKDAYS_SHORT, weekday, fmtNum, uid } from '../util.js';
+import { WEEKDAYS, WEEKDAYS_SHORT, weekday, weekStart, addDays, fmtNum, uid } from '../util.js';
 import { today, go } from '../context.js';
 import { setAssistantKind } from './assistant.js';
 
@@ -51,8 +51,30 @@ function mealDetails(meal) {
     meal.tip ? h('p', { class: 'small', text: `💡 ${meal.tip}` }) : null);
 }
 
-/** Öğün seçici: Bugün'de "ne yedim", Plan'da slot düzenleme için. */
-function openMealPicker({ title, slot, plan, includeOutGeneric = false, includeNone = false, onPick }) {
+/** "Listede yok" — adını yaz, proteini kabaca seç. */
+function openFreeFood(onDone) {
+  const name = h('input', { type: 'text', class: 'input', placeholder: 'ör. Çiğköfte dürüm', maxlength: 60 });
+  let protein = FREE_PROTEIN[0].value;
+  const level = segmented(FREE_PROTEIN.map((f) => ({ value: f.value, label: f.label })), protein, (v) => { protein = v ?? protein; });
+  let sheet;
+  sheet = openSheet({
+    title: 'Listede olmayan bir şey',
+    content: h('div', { class: 'form' },
+      field('Ne yedin?', name),
+      h('div', { class: 'field' }, h('span', { class: 'label', text: 'Protein (kabaca)' }), level,
+        h('div', { class: 'hint', text: FREE_PROTEIN.map((f) => `${f.label}: ${f.hint}`).join(' · ') })),
+      h('p', { class: 'muted small', text: 'Plan dışı yemek normal; günün kalanında protein önerisi çıkar.' })),
+    actions: [btn('Kaydet', () => {
+      const n = name.value.trim();
+      if (!n) { toast('Ne yediğini yaz.'); return; }
+      sheet.close();
+      onDone(freeEntry(n, protein));
+    }, 'primary')],
+  });
+}
+
+/** Öğün seçici: Bugün'de "ne yedim", Plan'da slot düzenleme için. onFree verilirse "Listede yok" seçeneği çıkar. */
+export function openMealPicker({ title, slot, plan, includeOutGeneric = false, includeNone = false, onPick, onFree = null }) {
   const kind = SLOT_KIND[slot] ?? 'snack';
   const tools = prefsOf(plan).tools;
   let sheet;
@@ -60,11 +82,12 @@ function openMealPicker({ title, slot, plan, includeOutGeneric = false, includeN
   const row = (meal) => h('button', { type: 'button', class: 'entry', onClick: () => pick(meal.id) },
     h('span', { class: 'entry-main' }, mealInfo(meal)),
     h('span', { class: 'chev', 'aria-hidden': 'true', text: '›' }));
-  const outs = kind === 'snack' ? [] : Object.values(OUT_OPTIONS).filter((o) => o.slots.includes(kind));
+  const outs = Object.values(OUT_OPTIONS).filter((o) => o.slots.includes(kind));
   const homes = choicesFor(slot, plan, tools);
   sheet = openSheet({
     title,
     content: h('div', null,
+      onFree ? h('button', { type: 'button', class: 'btn block', text: '✍️ Listede yok — kendim yazayım', onClick: () => { sheet.close(); openFreeFood(onFree); } }) : null,
       includeOutGeneric ? h('button', { type: 'button', class: 'btn block', text: '🍽️ Dışarıda (sonra seçerim)', onClick: () => pick(OUT) }) : null,
       includeNone ? h('button', { type: 'button', class: 'btn block ghost', text: '— Boş bırak', onClick: () => pick(null) }) : null,
       homes.length ? h('h3', { class: 'date-head', text: kind === 'snack' ? 'Ara öğünler' : 'Evde' }) : null,
@@ -74,10 +97,22 @@ function openMealPicker({ title, slot, plan, includeOutGeneric = false, includeN
   });
 }
 
-async function markEaten(t, slot, meal) {
-  const entry = meal ? eatenEntry(meal) : null;
+/** entryOrMeal: kütüphane öğünü, serbest kayıt (freeEntry) ya da null (geri al). */
+export async function markEaten(t, slot, entryOrMeal) {
+  const entry = !entryOrMeal ? null : entryOrMeal.free ? entryOrMeal : eatenEntry(entryOrMeal);
   await saveDaily(t, applyMealToDaily(state.daily[t], slot, entry));
-  toast(entry ? `Yedim ✓ +${entry.protein} g protein` : 'Geri alındı');
+  toast(entry ? `${entry.name.slice(0, 30)} ✓ +${entry.protein} g protein` : 'Geri alındı');
+}
+
+/** "Ne yedin?" seçicisi — Bugün ekranı ve Yemek sekmesi ortak kullanır. */
+export function askWhatEaten(t, slot, plan) {
+  openMealPicker({
+    title: `${slotLabel(slot)}: ne yedin?`,
+    slot,
+    plan,
+    onPick: (id) => id && markEaten(t, slot, mealById(id, plan)),
+    onFree: (entry) => markEaten(t, slot, entry),
+  });
 }
 
 function proteinMeter(protein, min, max) {
@@ -133,7 +168,7 @@ function renderSetup(root, existing) {
 function renderToday(root, plan) {
   const t = today();
   const wd = weekday(t);
-  const day = plan.days[wd] ?? {};
+  const day = dayFor(plan, t);
   const daily = state.daily[t] ?? {};
   const eaten = daily.meals ?? {};
   const p = state.profile ?? {};
@@ -164,18 +199,18 @@ function renderToday(root, plan) {
       c.append(
         h('p', null, h('strong', { text: entry.name }), h('span', { class: 'muted', text: ` · ~${entry.protein} g protein` })),
         h('div', { class: 'actions-row' },
-          btn('Değiştir', () => openMealPicker({ title: `${slotLabel(slot)}: ne yedin?`, slot, plan, onPick: (id) => id && markEaten(t, slot, mealById(id, plan)) }), 'small'),
+          btn('Değiştir', () => askWhatEaten(t, slot, plan), 'small'),
           btn('Geri al', () => markEaten(t, slot, null), 'small ghost')));
     } else if (planned === OUT) {
       c.append(
         h('p', { class: 'muted', text: 'Dışarıda yiyeceksin. Yediğinde seç; proteini kayda eklenir.' }),
         h('div', { class: 'actions-row' },
-          btn('Ne yedim? Seç', () => openMealPicker({ title: `${slotLabel(slot)}: ne yedin?`, slot, plan, onPick: (id) => id && markEaten(t, slot, mealById(id, plan)) }), 'primary'),
+          btn('Ne yedim? Seç', () => askWhatEaten(t, slot, plan), 'primary'),
           btn('Kurallar', () => { guideFilter = 'out'; go('/yemek/rehber'); }, 'small ghost')));
     } else if (meal) {
       c.append(mealInfo(meal), mealDetails(meal),
         h('div', { class: 'actions-row' },
-          btn('Başka bir şey yedim', () => openMealPicker({ title: `${slotLabel(slot)}: ne yedin?`, slot, plan, onPick: (id) => id && markEaten(t, slot, mealById(id, plan)) }), 'small'),
+          btn('Başka bir şey yedim', () => askWhatEaten(t, slot, plan), 'small'),
           btn('Yedim ✓', () => markEaten(t, slot, meal), 'primary')));
     }
     root.append(c);
@@ -212,8 +247,9 @@ function renderPlan(root, plan) {
   const p = state.profile ?? {};
   const min = p.proteinMin ?? 120;
 
-  const save = async (days) => {
-    await setKV('mealplan', { ...plan, days, source: plan.source === 'ai' ? 'ai-edited' : plan.source, updatedAt: new Date().toISOString() });
+  const weekDates = Array.from({ length: 7 }, (_, i) => addDays(weekStart(t), i));
+  const save = async (next) => {
+    await setKV('mealplan', { ...next, source: plan.source === 'ai' ? 'ai-edited' : plan.source, updatedAt: new Date().toISOString() });
   };
   const editSlot = (wd, slot) => {
     const kind = SLOT_KIND[slot];
@@ -224,10 +260,11 @@ function renderPlan(root, plan) {
       includeOutGeneric: kind !== 'snack',
       includeNone: kind === 'snack',
       onPick: async (value) => {
+        // Plan sekmesindeki düzenleme haftalık şablonu değiştirir; o güne özel değişiklik varsa kaldırılır.
         const days = plan.days.map((d) => ({ ...d }));
         days[wd][slot] = value;
         if (slot !== 'snack2' && !days[wd].snack2) fillGaps(days[wd], p, plan, prefs.tools);
-        await save(days);
+        await save(withOverride({ ...plan, days }, weekDates[wd], slot, undefined, t));
       },
     });
   };
@@ -267,13 +304,24 @@ function renderPlan(root, plan) {
       : null,
   ]);
 
-  plan.days.forEach((d, wd) => {
+  // Bu haftadan sonraki günlere ait güne özel değişiklikler (ör. Pazar akşamı gün sonu kontrolü).
+  const later = Object.entries(plan.overrides ?? {}).filter(([d]) => d > weekDates[6]).sort(([a], [b]) => (a < b ? -1 : 1));
+  if (later.length) {
+    root.append(h('div', { class: 'notice' },
+      h('strong', { text: 'Önümüzdeki günlere özel değişiklikler' }),
+      h('ul', { class: 'rules' }, later.flatMap(([d, slots]) => Object.entries(slots).map(([s, v]) =>
+        h('li', { text: `${WEEKDAYS[weekday(d)]} (${d.slice(8)}.${d.slice(5, 7)}) · ${slotLabel(s)}: ${v === OUT ? 'Dışarıda' : v ? mealById(v, plan)?.name ?? v : '—'}` }))))));
+  }
+
+  plan.days.forEach((_, wd) => {
+    const changed = plan.overrides?.[weekDates[wd]] ?? {};
+    const d = dayFor(plan, weekDates[wd]);
     const tot = dayTotals(d, plan);
     const rows = SLOTS.filter((s) => s !== 'snack2' || d.snack2).map((slot) => {
       const v = d[slot];
       const meal = mealById(v, plan);
       const n = slotNutrition(v, slot, plan);
-      const name = v === OUT ? '🍽️ Dışarıda' : meal ? meal.name : '—';
+      const name = `${v === OUT ? '🍽️ Dışarıda' : meal ? meal.name : '—'}${slot in changed ? ' • bu haftaya özel' : ''}`;
       return h('button', { type: 'button', class: 'slot-row', onClick: () => editSlot(wd, slot) },
         h('span', { class: 'slot-label', text: KIND_LABELS[SLOT_KIND[slot]] }),
         h('span', { class: 'slot-name', text: name }),
