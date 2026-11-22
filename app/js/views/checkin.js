@@ -8,7 +8,7 @@ import { addDays, fmtDate, fmtNum, parseNum, uid, weekStart, weekday, WEEKDAYS, 
 import { today, startKey, currentAlerts, runAction, go, maintenanceOn, targetsToday, setMaintenance } from '../context.js';
 import { checkinWeek } from '../rules.js';
 import { IFTHEN_TRIGGERS, MAX_IFTHEN, normalizeIfThen, suggestedIfThen } from '../ifthen.js';
-import { setAssistantKind } from './assistant.js';
+import { setAssistantKind, focusCard } from './assistant.js';
 
 /** Kontrol edilen hafta: Pazar → bu hafta, Pazartesi → geçen hafta, diğer günler → bu hafta. */
 export const reviewWeek = (t) => checkinWeek(t) ?? weekStart(t);
@@ -157,9 +157,11 @@ export function renderCheckin(root) {
   root.append(h('header', { class: 'page-head' },
     h('div', null, h('h1', { text: 'Haftalık kontrol' }), h('p', { class: 'muted', text: done ? 'Bu hafta yapıldı ✓ — istersen tekrar bakabilirsin.' : '~3 dakika' })),
     btn('Kapat', () => go('/bugun'), 'small ghost')));
+  const focus = focusCard(state.meta, t, { title: '🎯 Odağın — tuttu mu?' });
+  if (focus) root.append(focus);
   root.append(summaryCard(t, wk), waistCard(t, wk), targetsCard(t), nextWeekCard(t, wk), ifThenCard());
   root.append(h('div', { class: 'actions-row' },
-    state.settings.aiEnabled ? btn('🤖 Yapay zekâya haftayı değerlendirt', () => { setAssistantKind('review'); go('/asistan'); }) : null,
+    state.settings.aiEnabled ? btn('🤖 Yapay zekâyla değerlendir (yeni odak)', () => { setAssistantKind('review'); go('/asistan'); }) : null,
     btn(done ? 'Bitti' : 'Kontrolü bitir ✓', async () => {
       await updateMeta({ lastCheckin: wk });
       toast('Haftalık kontrol tamam 🗓️');

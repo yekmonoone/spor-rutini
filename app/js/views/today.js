@@ -16,7 +16,7 @@ import { openDailyForm, openPadelForm, openMeasureForm, openTestForm } from '../
 import { startWorkout } from './active.js';
 import { OUT, SLOT_LABELS, dayFor, mealById, mealNutrition } from '../mealplan.js';
 import { askWhatEaten, markEaten } from './meals.js';
-import { setAssistantKind } from './assistant.js';
+import { setAssistantKind, focusCard } from './assistant.js';
 
 const LEVEL_LABEL = { warn: 'Uyarı', info: 'Bilgi', success: 'Tamam' };
 
@@ -94,7 +94,9 @@ function mealRow(t, slot, plan, day, eaten, icon, time) {
   } else if (planned === OUT) {
     body = [h('p', { class: 'flow-text muted', text: 'Dışarıda — yediğinde seç.' }),
       planHint('eatout'),
-      h('div', { class: 'flow-actions' }, btn('Ne yedim?', () => askWhatEaten(t, slot, plan), 'small primary'))];
+      h('div', { class: 'flow-actions' },
+        btn('Ne yedim?', () => askWhatEaten(t, slot, plan), 'small primary'),
+        state.settings.aiEnabled ? btn('🤖 Ne yesem?', () => { setAssistantKind('eatout'); go('/asistan'); }, 'small') : null)];
   } else if (meal) {
     body = [h('p', { class: 'flow-text', text: `${meal.name} · ~${mealNutrition(meal).mid} g protein` }),
       h('div', { class: 'flow-actions' },
@@ -287,6 +289,8 @@ export function renderToday(root) {
 
   const base = baselineCard(t, sk);
   if (base) root.append(base);
+  const focus = focusCard(state.meta, t);
+  if (focus) root.append(focus);
 
   const rows = [morningRow(t, r)];
   if (mp?.days) {

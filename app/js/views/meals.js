@@ -293,7 +293,7 @@ function renderPlan(root, plan) {
     h('div', { class: 'actions-row' },
       btn('Tercihler', () => go('/yemek/tercihler'), 'small'),
       state.settings.aiEnabled
-        ? btn('🤖 Claude\'dan plan iste', () => { setAssistantKind('meals'); go('/asistan'); }, 'small primary')
+        ? btn('🤖 Yapay zekâdan plan iste', () => { setAssistantKind('meals'); go('/asistan'); }, 'small primary')
         : null),
     plan.note ? h('div', { class: 'notice pre', text: `🤖 ${plan.note}` }) : null,
     h('p', { class: 'muted small', text: `Bu hafta: ${home} ev öğünü (${veg} tanesi sebzeli), ${out} dışarıda öğün.${below ? ` ${below} günde planlanan protein hedefin altında.` : ' Protein her gün hedefte.'}` }),

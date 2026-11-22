@@ -1,6 +1,6 @@
 # Spor Takip Uygulaması — Gereksinimler
 
-> Durum: **1., 2. ve 3. aşama + yemek düzeni + gün akışı + haftalık kontrol ve ölçüm temeli + bildirimler + zaman verimli antrenman geliştirildi** (sürüm 0.8.0, yayında: https://yekmonoone.github.io/spor-rutini/ — eşitleme için Supabase projesi kurulmalı: [supabase/KURULUM.md](supabase/KURULUM.md)) · Rutin için: [spor-rutini-plani.md](spor-rutini-plani.md) · Çalıştırma: [README.md](README.md)
+> Durum: **1., 2. ve 3. aşama + yemek düzeni + gün akışı + haftalık kontrol ve ölçüm temeli + bildirimler + zaman verimli antrenman + yapay zekâ koç hafızası geliştirildi** (sürüm 0.9.0, yayında: https://yekmonoone.github.io/spor-rutini/ — eşitleme için Supabase projesi kurulmalı: [supabase/KURULUM.md](supabase/KURULUM.md)) · Rutin için: [spor-rutini-plani.md](spor-rutini-plani.md) · Çalıştırma: [README.md](README.md)
 
 ## 1. Amaç
 Verileri ve ilerlemeyi düzenli tutmak; isteğe bağlı AI ile konuşmak; uyarı ve öneri almak; önümüzdeki dönem için program oluşturmak.
@@ -47,6 +47,7 @@ Verileri ve ilerlemeyi düzenli tutmak; isteğe bağlı AI ile konuşmak; uyarı
 - **0.7.0 — bildirimler:** Web Push (iOS 16.4+ ana ekran uygulaması, eşitleme gerekli). `push_subscriptions` tablosu (RLS), `pg_cron` 15 dk → Edge Function `send-reminders`; akıllı koşullar (tartı/antrenman/adım/haftalık kontrol yapıldıysa göndermez), günde bir kez, Europe/Istanbul. Kurulum: [supabase/BILDIRIM-KURULUM.md](supabase/BILDIRIM-KURULUM.md).
 
 ## 5. AI özellikleri (anahtar açıksa)
+- **0.9.0:** yapılandırılmış haftalık değerlendirme (≤3 odak, kalori ±150 adım, eğer–o zaman), "Dışarıda ne yesem?" (seçenek → tek dokunuşla öğüne kayıt), koç notları ve haftalık odak sonraki mesaja eklenir, her türde yalnızca gereken veri gider (veri azaltma), panodan yapıştırma.
 - **Sohbet:** profil + plan + son haftaların özeti bağlam olarak gönderilir.
 - **Haftalık değerlendirme:** verilerden kısa yorum ve öneri.
 - **Program oluşturma:** sonraki 4 haftalık blok önerisi; kullanıcı onaylamadan programa uygulanmaz.

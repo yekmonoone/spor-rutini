@@ -88,6 +88,12 @@ Ana ekran uygulamasında ve eşitleme bağlıyken Web Push hatırlatmaları: sab
 
 - **3. aşama (kopyala-yapıştır modu, sürüm 0.3.0):** Ayarlar → Yapay zekâ asistanı. Uygulama verilerden hazır bir mesaj üretir (değerlendirme, program, yemek planı, soru), panoya kopyalar ve Claude/ChatGPT/Gemini'yi açar; ağ isteği yapmaz (`app/js/ai.js`). Yapay zekânın verdiği ```json cevabı geri yapıştırılınca türü (A/B programı, 7 günlük yemek planı ya da gün sonu değişiklikleri) tanınır, doğrulanır ve onayla uygulanır (`settings.customProgram`, `mealplan`).
 - **Gün sonu kontrolü (0.5.0):** plandan sapılan günlerde bugün ne olduğu, plan dışı yenenler ve gün notu Claude'a gider; Claude haftanın kalanı için **en fazla 3 küçük değişiklik** önerir. Uygulama sınırları denetler: yeni malzeme gerektiren öğün yok (yalnızca bu haftanın alışveriş listesiyle yapılabilenler ya da dışarıda), yeni ekipman/program yok (yalnızca gün türü değişir), yalnızca haftanın kalan günleri. Değişiklikler güne özeldir (`settings.scheduleOverrides`, `mealplan.overrides`), haftalık şablonu bozmaz.
+- **0.9.0 — koç hafızası ve yeni yardımlar:**
+  - **Haftayı değerlendir** artık sonunda JSON verir: en fazla 3 ölçülebilir **haftalık odak** (Bugün, haftalık kontrol ve asistanda görünür), kalori değişikliği (yalnızca −150 / 0 / +150, taban ve bakım dönemi denetlenir) ve isteğe bağlı eğer–o zaman planları (`parseWeeklyReview`). Onayla uygulanır.
+  - **Dışarıda ne yesem?** (`eatout`): mekân/menü + bugün yenenler + kalan protein ile 2 seçenek; seçilen tek dokunuşla "Yedim" olarak öğüne kaydedilir (`parseEatOut`). Bugün ekranında dışarıda planlanan öğünde "🤖 Ne yesem?".
+  - **Koç notları** (`meta.coachNotes`, en fazla 8) ve haftalık odak (`meta.weeklyFocus`) sonraki mesajlara "Önceki öneriler" olarak kısaca eklenir — yapay zekâ önceki önerisini takip eder.
+  - **Veri azaltma:** her tür yalnızca gereken bölümleri gönderir (ör. "Dışarıda ne yesem?" yalnızca profil + bugün); ekranda hangi verilerin ve kaç karakter gittiği yazar.
+  - Asistan ekranı: açıklamalı tür kartları, "📋 Panodan yapıştır", uygulanacak öneri yoksa hata yerine "not olarak kaydet". Antrenman sekmesinde "🤖 Yeni program" ve "Varsayılan programa dön", İlerleme'de blok değerlendirmesi kısayolu.
 - **Sonra (isteğe bağlı):** API ile uygulama içi otomatik mod (anahtar Supabase Edge Function'da).
 
 > Bu uygulama genel bilgi verir, tıbbi tavsiye değildir.

@@ -1,6 +1,6 @@
 // Antrenman sekmesi: dönem, A/B günleri, hareket açıklamaları, son antrenmanlar.
-import { state } from '../store.js';
-import { h, btn, card } from '../ui.js';
+import { state, updateSettings } from '../store.js';
+import { h, btn, card, confirmSheet, toast } from '../ui.js';
 import {
   EX, PHASES, programFor, COOLDOWN, warmupFor, nextStrengthDay, plannedSets, programWeek, rirTarget, targetText,
   pairLabels, estimateMinutes, shortItems, pairRestSec, PAIR_TRANSITION_SEC,
@@ -10,6 +10,7 @@ import { isStrength } from '../stats.js';
 import { fmtDate } from '../util.js';
 import { today, startKey, go } from '../context.js';
 import { startWorkout } from './active.js';
+import { setAssistantKind } from './assistant.js';
 
 function exerciseRow(item, sets, label = null) {
   const ex = EX[item.ex];
@@ -38,6 +39,15 @@ export function renderProgram(root) {
       h('h1', { text: 'Antrenman' }),
       h('p', { class: 'muted', text: `${PHASES[phase].label} dönemi · Hafta ${week}${prog.custom ? ' · 🤖 yapay zekâ programı' : ''}` }))));
   if (prog.custom && prog.note) root.append(h('div', { class: 'notice pre', text: prog.note }));
+  if (state.settings.aiEnabled || prog.custom) {
+    root.append(h('div', { class: 'actions-row' },
+      state.settings.aiEnabled ? btn('🤖 Yapay zekâdan yeni program', () => { setAssistantKind('program'); go('/asistan'); }, 'small') : null,
+      prog.custom ? btn('Varsayılan programa dön', async () => {
+        if (!(await confirmSheet({ title: 'Varsayılan programa dön', message: 'Yapay zekâdan aktarılan program kaldırılacak; uygulamanın süperset programı geri gelir.', confirmLabel: 'Dön' }))) return;
+        await updateSettings({ customProgram: null });
+        toast('Varsayılan program');
+      }, 'small ghost') : null));
+  }
 
   if (state.draft) {
     root.append(h('section', { class: 'card highlight' },

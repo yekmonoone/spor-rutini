@@ -684,3 +684,13 @@ th { color: var(--text-2); font-weight: 600; font-size: 13px; }
 .ex-row .pair-tag { font-size: 12px; }
 .day-meta { margin: -4px 0 10px; }
 .ex-card { scroll-margin-top: 12px; }
+
+/* 0.9: asistan */
+.kind-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(150px, 1fr)); gap: 8px; margin-bottom: 12px; }
+.kind-opt { display: grid; gap: 2px; text-align: left; padding: 10px 12px; border: 1px solid var(--border); border-radius: 12px; background: var(--surface); color: var(--text); font: inherit; cursor: pointer; }
+.kind-opt .kind-icon { font-size: 20px; }
+.kind-opt[aria-pressed="true"] { border-color: var(--accent); background: var(--accent-weak); box-shadow: inset 0 0 0 1px var(--accent); }
+.focus-card { border-left: 3px solid var(--accent); }
+.focus-list { margin: 6px 0 0; padding-left: 20px; display: grid; gap: 4px; }
+.ai-result { margin-top: 12px; display: grid; gap: 10px; }
+.note-item p { margin: 6px 0; }

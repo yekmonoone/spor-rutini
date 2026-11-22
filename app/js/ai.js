@@ -4,11 +4,11 @@
 import { EX, PHASES, DAY_TYPES, programFor, programWeek, blockOf, targetText, plannedSets, resistanceText, isAvailable, normalizePairs } from './program.js';
 import { weeklyAverages, weeklySessions, exerciseHistory, trackedItems, valuesInRange } from './stats.js';
 import { ageFromBirthYear, effectiveTargets, inMaintenance } from './targets.js';
-import { IFTHEN_TRIGGERS } from './ifthen.js';
-import { addDays, avg, fmtDate, fmtNum, weekStart, weekday, WEEKDAYS } from './util.js';
+import { IFTHEN_TRIGGERS, normalizeIfThen } from './ifthen.js';
+import { addDays, avg, daysBetween, fmtDate, fmtNum, weekStart, weekday, WEEKDAYS } from './util.js';
 import { PAIN_AREAS } from './rules.js';
 import { extractJson } from './extract-json.js';
-import { MEALS, OUT_OPTIONS, TOOLS } from './foods.js';
+import { MEALS, OUT_OPTIONS, TOOLS, EAT_OUT_RULES } from './foods.js';
 import { defaultPrefs, buildDefaultPlan, mealNutrition, dayFor, mealById, mealsWithoutNewGroceries, OUT, SLOTS, SLOT_LABELS } from './mealplan.js';
 import { dayPlanFor } from './program.js';
 import { isStrength, testHistory, compareTests } from './stats.js';
@@ -23,13 +23,130 @@ export const AI_TARGETS = {
   other: { label: 'Diğer (yalnızca kopyala)', url: null },
 };
 
+/** Asistan türleri (sıra = ekrandaki sıra). input: serbest metin alanı gerekiyorsa yer tutucusu. */
 export const PROMPT_KINDS = {
-  review: { label: 'Değerlendir', icon: '📋' },
-  program: { label: 'Program', icon: '🗓️' },
-  meals: { label: 'Yemek', icon: '🍽️' },
-  day: { label: 'Gün sonu', icon: '🌙' },
-  question: { label: 'Soru', icon: '💬' },
+  review: { label: 'Haftayı değerlendir', icon: '📋', desc: 'İyi gidenler, sorunlar ve bu haftanın 3 odağı; gerekirse kaloriyi ve planlarını günceller.' },
+  day: { label: 'Gün sonu', icon: '🌙', desc: 'Plandan saptıysan haftanın kalanına en fazla 3 küçük değişiklik (yeni malzeme ve ekipman yok).' },
+  eatout: { label: 'Dışarıda ne yesem?', icon: '🍽️', desc: 'Mekâna ya da menüye göre 2 seçenek ve porsiyon; seçtiğini tek dokunuşla kaydedersin.', input: 'Mekân / menü (isteğe bağlı): ör. "kebapçı" ya da menüden birkaç satır. Menü fotoğrafını sohbete de ekleyebilirsin.' },
+  program: { label: 'Yeni program', icon: '🗓️', desc: 'Verilerine göre 4 haftalık A/B programı; uygulamaya aktarılır.' },
+  meals: { label: 'Yemek planı', icon: '🥗', desc: '7 günlük plan ve alışveriş listesi; uygulamaya aktarılır.' },
+  question: { label: 'Serbest soru', icon: '💬', desc: 'Aklındaki herhangi bir soru; verilerinle birlikte sorulur.', input: 'Örn: Bu hafta dizim ağrıdı, B gününde neyi değiştirmeliyim?' },
 };
+
+/**
+ * Her türe yalnızca gereken bölümler gider (daha kısa mesaj, daha az kişisel veri).
+ * 'coach' (önceki öneriler) ve 'padel' yalnızca veri varsa eklenir.
+ */
+const SECTIONS = {
+  review: ['profile', 'program', 'weeks', 'exercises', 'padel', 'feedback', 'meals', 'coach', 'alerts'],
+  program: ['profile', 'program', 'weeks', 'exercises', 'padel', 'feedback', 'coach', 'alerts'],
+  meals: ['profile', 'weeks', 'meals', 'coach', 'alerts'],
+  day: ['profile', 'program', 'weeks', 'feedback', 'meals', 'coach', 'today', 'rest', 'alerts'],
+  eatout: ['profile', 'todayFood'],
+  question: ['profile', 'program', 'weeks', 'exercises', 'padel', 'feedback', 'meals', 'coach', 'alerts'],
+};
+
+export const SECTION_LABELS = {
+  profile: 'profil ve hedefler', program: 'program', weeks: 'son 4 hafta', exercises: 'hareket geçmişi', padel: 'padel',
+  feedback: 'geri bildirim ve testler', meals: 'yemek düzeni', coach: 'önceki öneriler', today: 'bugün', rest: 'haftanın kalanı',
+  todayFood: 'bugün yediklerin', alerts: 'uyarılar',
+};
+
+/* ---------- Koç notları ve haftalık odak (kopyala-yapıştır modunda yapay zekânın "hafızası") ---------- */
+
+export const MAX_COACH_NOTES = 8;
+export const MAX_FOCUS = 3;
+
+/** Cevaptan ```json bloklarını çıkarıp okunur metni bırakır (en fazla 2000 karakter). */
+export function answerText(text) {
+  return String(text ?? '').replace(/```[\s\S]*?```/g, '').replace(/\n{3,}/g, '\n\n').trim().slice(0, 2000);
+}
+
+export function addCoachNote(notes, { date, kind, text }) {
+  const t = answerText(text);
+  if (!t) return notes ?? [];
+  return [...(notes ?? []), { id: `${date}-${Math.random().toString(36).slice(2, 8)}`, date, kind, text: t }].slice(-MAX_COACH_NOTES);
+}
+
+/** Son 8 gün içinde kaydedilmiş haftalık odak (yoksa null). */
+export function currentFocus(meta, today) {
+  const f = meta?.weeklyFocus;
+  if (!f?.items?.length || !f.date) return null;
+  const age = daysBetween(f.date, today);
+  return age >= 0 && age <= 8 ? f : null;
+}
+
+function coachSection(state, today) {
+  const lines = [];
+  const f = state.meta?.weeklyFocus;
+  if (f?.items?.length) lines.push(`- ${fmtDate(f.date)} tarihinde belirlediğimiz haftalık odak: ${f.items.join('; ')}`);
+  const last = (state.meta?.coachNotes ?? []).filter((x) => x.date <= today).slice(-1)[0];
+  if (last) {
+    const short = last.text.replace(/\s+/g, ' ');
+    lines.push(`- Son kaydettiğim öneri (${fmtDate(last.date)}, ${PROMPT_KINDS[last.kind]?.label ?? 'not'}): ${short.slice(0, 300)}${short.length > 300 ? '…' : ''}`);
+  }
+  return lines.join('\n');
+}
+
+function todayFoodSection(state, today) {
+  const r = state.daily[today] ?? {};
+  const p = effectiveTargets(state.profile, state.settings, today) ?? {};
+  const eaten = Object.values(r.meals ?? {}).map((m) => `${m.name} ~${m.protein} g`);
+  const protein = r.proteinG ?? 0;
+  const need = p.proteinMin ? Math.max(0, p.proteinMin - protein) : null;
+  return [
+    `- Bugün yediklerim: ${eaten.length ? eaten.join('; ') : 'henüz kayıt yok'} (toplam ~${protein} g protein).`,
+    `- Günlük hedef: protein ${p.proteinMin ?? '?'}–${p.proteinMax ?? '?'} g, kalori ${n(p.kcalMin, 0)}–${n(p.kcalMax, 0)} kcal.${need != null ? ` Kalan protein ~${need} g.` : ''}`,
+    `- Dışarıda yeme kurallarım: ${EAT_OUT_RULES.join(' ')}`,
+  ].join('\n');
+}
+
+/** Bu türde mesaja girecek bölümler (veri olmayan isteğe bağlı bölümler çıkarılır). */
+export function promptSections(kind, state, today) {
+  return (SECTIONS[kind] ?? SECTIONS.question).filter((s) => {
+    if (s === 'coach') return !!coachSection(state, today);
+    if (s === 'padel') return state.padel.some((p) => p.date >= addDays(today, -28));
+    return true;
+  });
+}
+
+/** Haftalık değerlendirme cevabı: { focus[], kcal (-150|0|150), kcalNote, ifThen|null }. */
+export function parseWeeklyReview(text, { settings = null, today = null } = {}) {
+  const { found, obj } = extractJson(text, (o) => o != null && typeof o === 'object' && !Array.isArray(o) && ('focus' in o || 'odak' in o));
+  if (!found || !obj) throw new Error('Cevapta haftalık odak listesi bulunamadı. Cevaptaki ```json bloğunun tamamını yapıştır.');
+  const raw = obj.focus ?? obj.odak;
+  const focus = (Array.isArray(raw) ? raw : [raw]).map((x) => String(x ?? '').trim().slice(0, 120)).filter(Boolean).slice(0, MAX_FOCUS);
+  if (!focus.length) throw new Error('Odak listesi boş. Yapay zekâdan en fazla 3 kısa odak maddesi iste.');
+  let kcal = Number(obj.kcal ?? obj.kalori ?? 0);
+  if (!Number.isFinite(kcal) || Math.abs(kcal) < 75) kcal = 0;
+  else kcal = Math.sign(kcal) * 150; // en fazla ±150 kcal adım
+  let kcalNote = '';
+  if (kcal !== 0 && today && inMaintenance(settings, today)) {
+    kcal = 0;
+    kcalNote = 'Bakım dönemindesin; kalori değişikliği uygulanmayacak.';
+  }
+  const ifRaw = obj.ifThen ?? obj.ifthen ?? obj.plans ?? null;
+  const ifThen = Array.isArray(ifRaw) && ifRaw.length ? normalizeIfThen(ifRaw) : null;
+  return { focus, kcal, kcalNote, ifThen: ifThen?.length ? ifThen : null };
+}
+
+/** "Dışarıda ne yesem?" cevabı: { options: [{ name, protein, kcal|null }] } (en fazla 3). */
+export function parseEatOut(text) {
+  const { found, obj } = extractJson(text, (o) => o != null && typeof o === 'object' && !Array.isArray(o) && ('options' in o || 'secenekler' in o));
+  if (!found || !obj) throw new Error('Cevapta seçenek listesi bulunamadı. Cevaptaki ```json bloğunun tamamını yapıştır.');
+  const list = obj.options ?? obj.secenekler;
+  if (!Array.isArray(list)) throw new Error('"options" bir liste olmalı.');
+  const options = list.slice(0, 3).map((o) => {
+    const kcal = Math.round(Number(o?.kcal ?? o?.kalori));
+    return {
+      name: String(o?.name ?? o?.ad ?? '').trim().slice(0, 60),
+      protein: Math.round(Number(o?.protein)),
+      kcal: Number.isFinite(kcal) && kcal > 0 && kcal <= 3000 ? kcal : null,
+    };
+  }).filter((o) => o.name && Number.isFinite(o.protein) && o.protein >= 0 && o.protein <= 150);
+  if (!options.length) throw new Error('Seçeneklerde ad ve protein (0–150 g) olmalı.');
+  return { options };
+}
 
 export const MAX_DAY_CHANGES = 3;
 const DAY_PLAN_TYPES = ['strength', 'walk', 'brisk', 'padel', 'rest'];
@@ -285,8 +402,29 @@ const SAFETY = [
  * ctx: { state, today, startKey, alerts, question }
  */
 export function buildPrompt(kind, { state, today, startKey, alerts = [], question = '' }) {
+  const maint = inMaintenance(state.settings, today);
   const task = {
-    review: 'Görev: Son haftalarımı değerlendir. 1) Neler iyi gidiyor, 2) en önemli 2–3 sorun, 3) önümüzdeki hafta için 3 somut öneri (antrenman, beslenme, uyku). Kalori hedefimi değiştirmem gerekiyorsa gerekçesiyle söyle.',
+    review: [
+      'Görev: Son haftalarımı değerlendir: 1) neler iyi gidiyor, 2) en önemli 2–3 sorun, 3) bu hafta için en fazla 3 somut ve ölçülebilir odak (antrenman, beslenme, uyku, adım). "Önceki öneriler" bölümü varsa o odakları tutup tutmadığımı verilerle kısaca değerlendir.',
+      `- Kalori hedefimi yalnızca 2–3 haftalık kilo trendi gerektiriyorsa değiştir: -150, 0 ya da 150 kcal; alt sınırın altına inme.${maint ? ' Şu an bakım dönemindeyim: 0 olmalı.' : ''}`,
+      '- İstersen eğer–o zaman planlarımı güncelle (en fazla 3). Tetikleyiciler: busy = vakit yok, eatout = dışarıda yemek, craving = canım fast food/tatlı çekti, nowalk = yürüyüş olmadı, padelcancel = padel iptal. Yeni malzeme ya da ekipman gerektirmesin.',
+      'En sonda TEK bir ```json bloğu ver (uygulama okuyup Bugün ekranında gösterir; geçerli JSON, çift tırnak):',
+      '```json',
+      JSON.stringify({ focus: ['Her gün en az 140 g protein', 'Pazartesi, Çarşamba, Perşembe kuvvet', 'Her gün 7.500+ adım'], kcal: 0, ifThen: [{ trigger: 'busy', text: '20 dakikalık kısa antrenmanı yaparım.' }] }),
+      '```',
+      '- "focus": en fazla 3 madde, her biri en fazla 100 karakter. "ifThen" isteğe bağlı; değiştirmeyeceksen yazma.',
+    ].join('\n'),
+    eatout: [
+      `Görev: Şimdi dışarıda yemek yiyeceğim.${question.trim() ? ` Mekân / menü: ${question.trim()}` : ' Mekânı ya da menüyü aşağıya yazacağım veya fotoğrafını ekleyeceğim.'}`,
+      '- 2 seçenek öner (en uygun + alternatif): ne sipariş edeyim, porsiyon / ekmek / pilav ne kadar, içecek ne olsun. Her biri için yaklaşık protein ve kalori yaz. Kısa tut.',
+      '- Kalan protein ihtiyacımı bu öğünde mümkün olduğunca karşıla; günlük kalori hedefimi aşma.',
+      '- Canım belli bir şey çekiyorsa (ör. çiğköfte, pizza) yasaklama: makul porsiyonu ve yanına ne ekleyeceğimi söyle.',
+      'En sonda TEK bir ```json bloğu ver (uygulama "Yedim" olarak kaydedebilsin; geçerli JSON):',
+      '```json',
+      JSON.stringify({ options: [{ name: 'Tavuk şiş + salata + ayran', protein: 45, kcal: 650 }, { name: 'Yarım ekmek köfte + söğüş', protein: 35, kcal: 600 }] }),
+      '```',
+      '- En fazla 2 seçenek; "name" en fazla 60 karakter; protein gram, kcal yaklaşık.',
+    ].join('\n'),
     program: [
       'Görev: Verilerime göre önümüzdeki 4 haftalık blok için Gün A ve Gün B programını öner. Önce kısa gerekçeni yaz.',
       'Sonra programı uygulamaya aktarabilmem için en sonda TEK bir ```json kod bloğu ver. Kurallar:',
@@ -330,26 +468,27 @@ export function buildPrompt(kind, { state, today, startKey, alerts = [], questio
     question: `Sorum: ${question.trim() || '(buraya sorunu yaz)'}`,
   }[kind];
 
+  const render = {
+    profile: () => `## Profil\n${profileSection(effectiveTargets(state.profile, state.settings, today) ?? state.profile, today)}`,
+    program: () => `## Program\n${programSection(state.settings, startKey, today)}`,
+    weeks: () => `## Son 4 hafta\n${weeksSection(state, today)}`,
+    exercises: () => `## Hareketler (son 3 seans)\n${exercisesSection(state)}`,
+    padel: () => `## Padel\n${padelSection(state, today)}`,
+    feedback: () => `## Geri bildirim ve testler\n${feedbackSection(state, today)}`,
+    meals: () => `## Yemek düzeni\n${mealsSection(state, today)}`,
+    coach: () => `## Önceki öneriler\n${coachSection(state, today)}`,
+    today: () => `## Bugün\n${todaySection(state, today)}`,
+    rest: () => `## Haftanın kalanı (plan)\n${restOfWeekSection(state, today)}`,
+    todayFood: () => `## Bugün\n${todayFoodSection(state, today)}`,
+    alerts: () => `## Uygulamanın uyarıları\n${alerts.length ? alerts.map((a) => `- ${a.title}`).join('\n') : '- Yok'}`,
+  };
+  const intro = kind === 'eatout'
+    ? 'Beslenme koçum gibi kısa ve pratik cevap ver. Aşağıda takip uygulamamdan güncel verilerim var.'
+    : 'Kişisel spor koçum gibi davranmanı istiyorum. Aşağıda spor takip uygulamamdan aldığım güncel verilerim var.';
   return [
-    'Kişisel spor koçum gibi davranmanı istiyorum. Aşağıda spor takip uygulamamdan aldığım güncel verilerim var.',
+    intro,
     '',
-    `## Profil\n${profileSection(state.profile, today)}`,
-    '',
-    `## Program\n${programSection(state.settings, startKey, today)}`,
-    '',
-    `## Son 4 hafta\n${weeksSection(state, today)}`,
-    '',
-    `## Hareketler (son 3 seans)\n${exercisesSection(state)}`,
-    '',
-    `## Padel\n${padelSection(state, today)}`,
-    '',
-    `## Geri bildirim ve testler\n${feedbackSection(state, today)}`,
-    '',
-    `## Yemek düzeni\n${mealsSection(state, today)}`,
-    '',
-    ...(kind === 'day' ? [`## Bugün\n${todaySection(state, today)}`, '', `## Haftanın kalanı (plan)\n${restOfWeekSection(state, today)}`, ''] : []),
-    `## Uygulamanın uyarıları\n${alerts.length ? alerts.map((a) => `- ${a.title}`).join('\n') : '- Yok'}`,
-    '',
+    ...promptSections(kind, state, today).flatMap((s) => [render[s](), '']),
     SAFETY,
     '',
     task,

@@ -7,6 +7,7 @@ import { weeklyAverages, weeklySessions, exerciseHistory, blockSummary, valuesIn
 import { whtr } from '../targets.js';
 import { addDays, avg, clamp, daysBetween, fmtDate, fmtNum, weekStart } from '../util.js';
 import { today, startKey, go, runAction } from '../context.js';
+import { setAssistantKind } from './assistant.js';
 
 const SERIES_1 = 'var(--series-1)';
 const SERIES_2 = 'var(--series-2)';
@@ -225,7 +226,8 @@ function blockSection() {
       h('ul', { class: 'rules' }, lines.map((l) => h('li', { text: l }))),
       tips.length ? h('ul', { class: 'tips' }, tips.map((l) => h('li', { text: l }))) : null));
   }
-  return card(h('h3', { text: 'Blok değerlendirmesi (4 hafta)' }), items);
+  return card(h('h3', { text: 'Blok değerlendirmesi (4 hafta)' }), items,
+    state.settings.aiEnabled ? btn('🤖 Yapay zekâyla değerlendir', () => { setAssistantKind('review'); go('/asistan'); }, 'small') : null);
 }
 
 export function renderProgress(root) {
