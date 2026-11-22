@@ -80,6 +80,10 @@ tools/                Yerel sunucu ve simge üretici
 
 Telefon ve bilgisayar arasında Supabase üzerinden eşitleme: kurulum adımları [supabase/KURULUM.md](supabase/KURULUM.md), veritabanı ve RLS kuralları [supabase/schema.sql](supabase/schema.sql). Kütüphane kullanılmaz; `app/js/sync.js` Supabase'in REST uçlarına doğrudan bağlanır, karar mantığı `app/js/sync-core.js` içinde (son yazan kazanır, silmeler de eşitlenir). Bağlantı/oturum bilgisi yalnızca cihazda tutulur ve yedek dosyasına girmez.
 
+## Bildirimler (0.7.0)
+
+Ana ekran uygulamasında ve eşitleme bağlıyken Web Push hatırlatmaları: sabah tartı, antrenman, gün sonu, Pazar haftalık kontrol — yalnızca gerekiyorsa (ör. kilo girildiyse sabah bildirimi gelmez). Sunucu tarafı `supabase/functions/send-reminders` (bağımlılıksız Web Push: RFC 8291/8292, WebCrypto), zamanlayıcı `pg_cron`. Kurulum: [supabase/BILDIRIM-KURULUM.md](supabase/BILDIRIM-KURULUM.md).
+
 ## Yapay zekâ
 
 - **3. aşama (kopyala-yapıştır modu, sürüm 0.3.0):** Ayarlar → Yapay zekâ asistanı. Uygulama verilerden hazır bir mesaj üretir (değerlendirme, program, yemek planı, soru), panoya kopyalar ve Claude/ChatGPT/Gemini'yi açar; ağ isteği yapmaz (`app/js/ai.js`). Yapay zekânın verdiği ```json cevabı geri yapıştırılınca türü (A/B programı, 7 günlük yemek planı ya da gün sonu değişiklikleri) tanınır, doğrulanır ve onayla uygulanır (`settings.customProgram`, `mealplan`).

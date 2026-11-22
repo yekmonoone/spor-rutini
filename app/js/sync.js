@@ -215,3 +215,14 @@ export async function initSync() {
   window.addEventListener('online', () => scheduleSync(500));
   if (isConnected()) scheduleSync(300);
 }
+
+/** Diğer modüller için oturumlu REST çağrısı (ör. bildirim aboneliği). Giriş yoksa hata fırlatır. */
+export function rest(path, opts) {
+  return request(path, opts);
+}
+export const currentUserId = () => cfg?.userId ?? null;
+
+/** Edge Function çağrısı (oturumla). */
+export function callFunction(name, body) {
+  return request(`/functions/v1/${name}`, { method: 'POST', body });
+}

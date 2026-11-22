@@ -11,6 +11,7 @@ import { IFTHEN_TRIGGERS } from '../ifthen.js';
 import { profileForm } from './profile-form.js';
 import { installHint } from './onboarding.js';
 import { syncCard } from './sync-card.js';
+import { pushCard } from './push-card.js';
 import { isConnected, signOut } from '../sync.js';
 import { AI_TARGETS } from '../ai.js';
 
@@ -116,6 +117,7 @@ export function renderSettings(root) {
       h('div', { class: 'grid2' }, field('Set arası dinlenme', rest), h('div', { class: 'field end' }, sound))),
     habitsCard(),
     syncCard(),
+    pushCard(),
     card(
       h('h2', { text: 'Yedekleme' }),
       h('p', { class: 'muted', text: lastBackup ? `Son yedek: ${fmtDate(lastBackup, { day: 'numeric', month: 'long', year: 'numeric' })}` : 'Henüz yedek alınmadı.' }),

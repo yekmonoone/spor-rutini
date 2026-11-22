@@ -3,3 +3,8 @@ spor-rutini-plani.md
 .claude/
 node_modules/
 *.log
+
+# Bildirim gizli anahtarları ve doldurulmuş kurulum SQL'i
+supabase/.secrets.local
+*.local.sql
+supabase/.temp/

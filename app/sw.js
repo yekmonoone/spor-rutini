@@ -1,6 +1,6 @@
 // Çevrimdışı çalışma: uygulama dosyaları sürüm adlı bir önbellekte tutulur.
 // Bir dosya ekleyip çıkarınca ASSETS listesini, sürümü değiştirince VERSION'ı güncelle (testler kontrol eder).
-const VERSION = '0.6.0';
+const VERSION = '0.7.0';
 const CACHE = `spor-rutini-${VERSION}`;
 const ASSETS = [
   './',
@@ -41,6 +41,10 @@ const ASSETS = [
   './js/views/meals.js',
   './js/views/checkin.js',
   './js/ifthen.js',
+  './js/config.js',
+  './js/push.js',
+  './js/push-types.js',
+  './js/views/push-card.js',
   './js/views/onboarding.js',
   './js/views/profile-form.js',
   './js/views/program.js',
@@ -79,4 +83,33 @@ self.addEventListener('fetch', (event) => {
     return;
   }
   event.respondWith(caches.match(req, { ignoreSearch: true }).then((res) => res || fetch(req)));
+});
+
+/* ---------- Bildirimler (0.7.0) ---------- */
+self.addEventListener('push', (event) => {
+  let d = {};
+  try { d = event.data ? event.data.json() : {}; } catch { d = { body: event.data ? event.data.text() : '' }; }
+  event.waitUntil(self.registration.showNotification(d.title || 'Spor Rutini', {
+    body: d.body || '',
+    icon: './icons/icon-192.png',
+    badge: './icons/icon-192.png',
+    tag: d.tag || undefined,
+    data: { url: d.url || '#/bugun' },
+  }));
+});
+
+self.addEventListener('notificationclick', (event) => {
+  event.notification.close();
+  const url = new URL(event.notification.data?.url || '#/bugun', self.registration.scope).href;
+  event.waitUntil((async () => {
+    const list = await self.clients.matchAll({ type: 'window', includeUncontrolled: true });
+    for (const c of list) {
+      if ('focus' in c) {
+        await c.focus();
+        if ('navigate' in c) await c.navigate(url).catch(() => {});
+        return;
+      }
+    }
+    await self.clients.openWindow(url);
+  })());
 });

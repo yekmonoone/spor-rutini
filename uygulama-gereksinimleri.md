@@ -1,6 +1,6 @@
 # Spor Takip Uygulaması — Gereksinimler
 
-> Durum: **1., 2. ve 3. aşama + yemek düzeni + gün akışı + haftalık kontrol ve ölçüm temeli geliştirildi** (sürüm 0.6.0, yayında: https://yekmonoone.github.io/spor-rutini/ — eşitleme için Supabase projesi kurulmalı: [supabase/KURULUM.md](supabase/KURULUM.md)) · Rutin için: [spor-rutini-plani.md](spor-rutini-plani.md) · Çalıştırma: [README.md](README.md)
+> Durum: **1., 2. ve 3. aşama + yemek düzeni + gün akışı + haftalık kontrol ve ölçüm temeli + bildirimler geliştirildi** (sürüm 0.7.0, yayında: https://yekmonoone.github.io/spor-rutini/ — eşitleme için Supabase projesi kurulmalı: [supabase/KURULUM.md](supabase/KURULUM.md)) · Rutin için: [spor-rutini-plani.md](spor-rutini-plani.md) · Çalıştırma: [README.md](README.md)
 
 ## 1. Amaç
 Verileri ve ilerlemeyi düzenli tutmak; isteğe bağlı AI ile konuşmak; uyarı ve öneri almak; önümüzdeki dönem için program oluşturmak.
@@ -43,7 +43,7 @@ Verileri ve ilerlemeyi düzenli tutmak; isteğe bağlı AI ile konuşmak; uyarı
   - Haftalık kontrol (`#/haftalik`, `meta.lastCheckin`) ve eğer–o zaman planları (`settings.ifThen`, en fazla 3; Singh 2024 alışkanlık medyanı ~59–66 gün, uygulama niyetleri d≈0,24–0,31).
   - Antrenman sonrası zorluk/ağrı (`workout.effort`, `workout.pain`), bakım dönemi (`settings.maintenanceFrom/Until`, kalori = tahmini harcama ±50).
   - Alışkanlık: aktif gün / 66 ve haftalık seri (≥2 kuvvet; bakım haftası zinciri kırmaz). Günlük seri/rozet yok.
-  - Sonraki (0.7.0): Web Push bildirimleri (ana ekran uygulaması + eşitleme).
+- **0.7.0 — bildirimler:** Web Push (iOS 16.4+ ana ekran uygulaması, eşitleme gerekli). `push_subscriptions` tablosu (RLS), `pg_cron` 15 dk → Edge Function `send-reminders`; akıllı koşullar (tartı/antrenman/adım/haftalık kontrol yapıldıysa göndermez), günde bir kez, Europe/Istanbul. Kurulum: [supabase/BILDIRIM-KURULUM.md](supabase/BILDIRIM-KURULUM.md).
 
 ## 5. AI özellikleri (anahtar açıksa)
 - **Sohbet:** profil + plan + son haftaların özeti bağlam olarak gönderilir.
