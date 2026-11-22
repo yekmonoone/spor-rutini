@@ -8,7 +8,7 @@ import {
   eatenEntry, applyMealToDaily, suggest, toolsOk, qtyText, dayFor, FREE_PROTEIN, freeEntry, withOverride,
 } from '../mealplan.js';
 import { WEEKDAYS, WEEKDAYS_SHORT, weekday, weekStart, addDays, fmtNum, uid } from '../util.js';
-import { today, go } from '../context.js';
+import { today, go, targetsToday } from '../context.js';
 import { setAssistantKind } from './assistant.js';
 
 const PATHS = { bugun: '/yemek', plan: '/yemek/plan', alisveris: '/yemek/alisveris', rehber: '/yemek/rehber' };
@@ -171,7 +171,7 @@ function renderToday(root, plan) {
   const day = dayFor(plan, t);
   const daily = state.daily[t] ?? {};
   const eaten = daily.meals ?? {};
-  const p = state.profile ?? {};
+  const p = targetsToday(t) ?? {};
   const protein = daily.proteinG ?? 0;
   const min = p.proteinMin ?? 120;
   const max = p.proteinMax ?? min;
@@ -244,7 +244,7 @@ function renderPlan(root, plan) {
   const t = today();
   const twd = weekday(t);
   const prefs = prefsOf(plan);
-  const p = state.profile ?? {};
+  const p = targetsToday(t) ?? {};
   const min = p.proteinMin ?? 120;
 
   const weekDates = Array.from({ length: 7 }, (_, i) => addDays(weekStart(t), i));

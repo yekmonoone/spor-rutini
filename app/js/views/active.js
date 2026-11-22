@@ -1,6 +1,7 @@
 // Aktif antrenman ekranı: plan önceden dolu, set set kayıt, dinlenme sayacı. Taslak sürekli kaydedilir.
 import { state, setKV, saveRecord } from '../store.js';
-import { h, appendChildren, btn, confirmSheet, toast, numInput, field, checkbox } from '../ui.js';
+import { h, appendChildren, btn, confirmSheet, toast, numInput, field, checkbox, openSheet, segmented, chips } from '../ui.js';
+import { PAIN_AREAS } from '../rules.js';
 import {
   EX, programFor, shortItems, BAND_LEVELS, warmupFor, COOLDOWN, plannedSets, programWeek, rirTarget,
   defaultResistance, resistanceText, targetText, progressionHint, unitSuffix,
@@ -104,6 +105,44 @@ function lastText(ex, last) {
   if (!last) return 'İlk kez yapıyorsun — rahat bir seviyeden başla.';
   const load = [last.variant, resistanceText(last.resistance)].filter(Boolean).join(', ');
   return `Geçen sefer (${fmtDate(last.date)}): ${last.sets.map((s) => s.reps).join(' · ')}${unitSuffix(ex.unit)}${load ? ` — ${load}` : ''}`;
+}
+
+export const EFFORTS = [
+  { value: 'easy', label: 'Kolay' },
+  { value: 'good', label: 'İyi' },
+  { value: 'hard', label: 'Çok zor' },
+];
+
+/** Bitirme sayfası: kısa geri bildirim (zorluk + ağrı). Kaydet → { effort, pain }, vazgeç → null. */
+function finishSheet({ done, total, editing, cooldownDone, effort, pain }) {
+  return new Promise((resolve) => {
+    let settled = false;
+    let sheet = null;
+    const end = (v) => {
+      if (settled) return;
+      settled = true;
+      resolve(v);
+      sheet?.close();
+    };
+    const eff = segmented(EFFORTS.map((e) => ({ ...e, allowNone: true })), effort);
+    const painChips = chips(Object.entries(PAIN_AREAS).map(([value, label]) => ({ value, label })), pain);
+    const summary = done === 0
+      ? 'Hiç set işaretlenmedi. Tamamladığın setleri ✓ ile işaretleyebilirsin; yine de kaydedebilirsin.'
+      : `${done}/${total} set tamamlandı.${cooldownDone ? '' : ' Sonda kalça fleksör esnetmesini unutma.'}`;
+    sheet = openSheet({
+      title: editing ? 'Değişiklikleri kaydet' : 'Antrenmanı bitir',
+      content: h('div', { class: 'form' },
+        h('p', { text: summary }),
+        h('div', { class: 'field' }, h('label', { text: 'Nasıldı?' }), eff,
+          h('div', { class: 'hint', text: 'İki antrenman üst üste "çok zor" gelirse uygulama yükü hafifletmeni önerir.' })),
+        h('div', { class: 'field' }, h('label', { text: 'Bir yerin ağrıdı mı? (kas yorgunluğu değil, eklem/keskin ağrı)' }), painChips)),
+      actions: [
+        h('button', { class: 'btn', type: 'button', text: 'Vazgeç', onClick: () => end(null) }),
+        h('button', { class: 'btn primary', type: 'button', text: 'Kaydet', onClick: () => end({ effort: eff.getValue() ?? null, pain: painChips.getValue() }) }),
+      ],
+      onClose: () => end(null),
+    });
+  });
 }
 
 export function renderActive(root) {
@@ -226,10 +265,10 @@ export function renderActive(root) {
   async function finish() {
     const done = d.exercises.reduce((n, e) => n + e.sets.filter((s) => s.done).length, 0);
     const total = d.exercises.reduce((n, e) => n + e.sets.length, 0);
-    const ok = await confirmSheet(done === 0
-      ? { title: 'Hiç set işaretlenmedi', message: 'Tamamladığın setleri ✓ ile işaretle. Yine de kaydedilsin mi?', confirmLabel: 'Yine de kaydet' }
-      : { title: d.editingId ? 'Değişiklikleri kaydet' : 'Antrenmanı bitir', message: `${done}/${total} set tamamlandı.${d.cooldownDone ? '' : '\nSonda kalça fleksör esnetmesini unutma.'}`, confirmLabel: 'Kaydet' });
-    if (!ok) return;
+    const res = await finishSheet({ done, total, editing: !!d.editingId, cooldownDone: !!d.cooldownDone, effort: d.effort ?? null, pain: d.pain ?? [] });
+    if (!res) return;
+    d.effort = res.effort;
+    d.pain = res.pain;
     cancelRest();
     const rec = deepCopy(d);
     delete rec.editingId;

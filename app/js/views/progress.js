@@ -1,11 +1,12 @@
 // İlerleme ekranı: kilo, bel, haftalık antrenman, hareket ilerlemesi, haftalık tablo ve blok değerlendirmesi.
 import { state } from '../store.js';
-import { h, card, segmented, selectEl } from '../ui.js';
+import { h, btn, card, segmented, selectEl } from '../ui.js';
 import { timeChart, columnChart, chartBlock, tableView } from '../charts.js';
 import { EX, PROGRAMS, PHASE_ORDER, WEEKLY_STRENGTH_TARGET, blockOf, programWeek, resistanceText, unitSuffix } from '../program.js';
-import { weeklyAverages, weeklySessions, exerciseHistory, blockSummary, valuesInRange, isStrength } from '../stats.js';
+import { weeklyAverages, weeklySessions, exerciseHistory, blockSummary, valuesInRange, isStrength, movingAverageSeries, trendWeight, trendRate, testHistory, compareTests } from '../stats.js';
+import { whtr } from '../targets.js';
 import { addDays, avg, clamp, daysBetween, fmtDate, fmtNum, weekStart } from '../util.js';
-import { today, startKey, go } from '../context.js';
+import { today, startKey, go, runAction } from '../context.js';
 
 const SERIES_1 = 'var(--series-1)';
 const SERIES_2 = 'var(--series-2)';
@@ -22,12 +23,9 @@ function weightSection(from) {
   const daily = Object.values(state.daily).filter((r) => r.weight != null && inR(r.date)).map((r) => ({ date: r.date, value: r.weight }));
   const t = today();
   const weeks = weeklyAverages(state.daily, 'weight').filter((w) => inR(addDays(w.week, 6)));
-  const weekly = weeks.map((w) => {
-    const mid = addDays(w.week, 3);
-    return { date: mid > t ? t : mid, value: Math.round(w.avg * 100) / 100, from: w.week, to: addDays(w.week, 6) };
-  });
+  const trend = movingAverageSeries(state.daily, from);
 
-  let summary = 'Haftada en az 3 kez tartıl; grafik haftalık ortalamaya bakar.';
+  let summary = 'Haftada en az 3 kez tartıl; çizgi son 7 günün ortalamasıdır (trend kilo).';
   if (weeks.length >= 2) {
     const a = weeks[weeks.length - 2];
     const b = weeks[weeks.length - 1];
@@ -35,6 +33,9 @@ function weightSection(from) {
     const pct = (loss / a.avg) * 100;
     const status = pct > 1 ? '⚠️ çok hızlı (hedef %0,5–1)' : pct >= 0.5 ? '✓ hedef aralıkta' : pct >= 0 ? '↘ yavaş' : '↗ artış';
     summary = `Son hafta ort. ${kg(b.avg)} · önceki haftaya göre ${signed(-loss, ' kg')} (%${fmtNum(Math.abs(pct))}) — ${status}`;
+    const tw = trendWeight(state.daily, t);
+    const tr = trendRate(state.daily, t);
+    if (tw != null) summary += ` · Trend şu an ${kg(tw)}${tr != null ? ` (son 7 günde ${signed(tr, ' kg')})` : ''}`;
   } else if (weeks.length === 1) {
     summary = `Bu hafta ort. ${kg(weeks[0].avg)}. Karşılaştırma için bir hafta daha veri gerekiyor.`;
   }
@@ -42,11 +43,11 @@ function weightSection(from) {
   return card(chartBlock({
     title: 'Kilo',
     subtitle: summary,
-    legendItems: [{ name: 'Haftalık ortalama', color: SERIES_1, kind: 'line' }, { name: 'Günlük tartı', color: MUTED, kind: 'dot' }],
+    legendItems: [{ name: 'Trend (7 gün ort.)', color: SERIES_1, kind: 'line' }, { name: 'Günlük tartı', color: MUTED, kind: 'dot' }],
     chart: timeChart({
       series: [
         { name: 'Günlük tartı', color: MUTED, type: 'dots', points: daily },
-        { name: 'Haftalık ortalama', color: SERIES_1, type: 'line', points: weekly },
+        { name: 'Trend (7 gün ort.)', color: SERIES_1, type: 'line', points: trend },
       ],
       yFormat: (v) => fmtNum(v),
       ariaLabel: 'Kilo grafiği',
@@ -58,6 +59,8 @@ function weightSection(from) {
 
 function waistSection(from) {
   const list = state.measurements.filter((m) => m.waistCm != null && (!from || m.date >= from));
+  const height = state.profile?.heightCm;
+  const last = list.length ? whtr(list[list.length - 1].waistCm, height) : null;
   let summary = 'Haftada 1 kez ölç: sabah, göbek hizasından, nefes verdikten sonra.';
   if (list.length >= 2) {
     const d = list[list.length - 1].waistCm - list[0].waistCm;
@@ -65,6 +68,7 @@ function waistSection(from) {
   } else if (list.length === 1) {
     summary = `Son ölçüm ${fmtNum(list[0].waistCm)} cm.`;
   }
+  if (last) summary += ` · Bel/boy ${fmtNum(last.ratio, 2)} — ${last.label}${last.ratio >= 0.5 ? ` · hedef bel < ${fmtNum(last.targetWaist)} cm` : ''}`;
   return card(chartBlock({
     title: 'Bel çevresi',
     subtitle: summary,
@@ -73,9 +77,31 @@ function waistSection(from) {
       yFormat: (v) => fmtNum(v),
       ariaLabel: 'Bel çevresi grafiği',
       empty: 'Henüz bel ölçümü yok.',
+      ref: height ? { value: Math.round(height * 5) / 10, label: 'bel/boy 0,5' } : null,
     }),
-    table: list.length ? tableView(['Tarih', 'Bel (cm)'], list.slice().reverse().map((m) => [fmtDate(m.date), fmtNum(m.waistCm)])) : null,
+    table: list.length ? tableView(['Tarih', 'Bel (cm)', 'Bel/boy'], list.slice().reverse().map((m) => [fmtDate(m.date), fmtNum(m.waistCm), height ? fmtNum(m.waistCm / height, 2) : '–'])) : null,
   }));
+}
+
+function testsSection() {
+  const tests = testHistory(state.measurements);
+  const lower = (v) => (v ? v.toLocaleLowerCase('tr-TR') : '');
+  const parts = [h('div', { class: 'card-head' }, h('h3', { text: '🏅 Güç testleri' }), btn('Test yap', () => runAction('form:test'), 'small'))];
+  if (!tests.length) {
+    parts.push(h('p', { class: 'muted', text: '4 haftada bir 5 dakikalık test (şınav, plank, 1 dk squat): kilo değişmese bile güçlendiğini gösterir.' }));
+    return card(...parts);
+  }
+  if (tests.length >= 2) {
+    const lines = ['İlk testten bu yana:', ...compareTests(tests[0], tests[tests.length - 1])];
+    parts.push(h('p', { class: 'small pre', text: lines.join('\n') }));
+  }
+  parts.push(tableView(['Tarih', 'Şınav', 'Plank', 'Squat/dk'], tests.slice().reverse().map((r) => [
+    fmtDate(r.date),
+    r.pushupReps == null ? '–' : `${lower(r.pushupLevel)} ${r.pushupReps}`.trim(),
+    r.plankSec == null ? '–' : `${r.plankSec} sn`,
+    r.squat60 == null ? '–' : String(r.squat60),
+  ])));
+  return card(...parts);
 }
 
 function sessionsSection(weeksN) {
@@ -179,6 +205,10 @@ function blockSection() {
       s.waistStart != null && s.waistEnd != null ? `Bel: ${fmtNum(s.waistStart)} → ${fmtNum(s.waistEnd)} cm (${signed(s.waistEnd - s.waistStart, ' cm')})` : 'Bel: en az 2 ölçüm gerekli',
       s.tracked ? `Hareketlerde ilerleme: ${s.improved}/${s.tracked}` : 'Hareket ilerlemesi: yeterli veri yok',
     ];
+    const tests = testHistory(state.measurements);
+    const before = tests.filter((x) => x.date < s.from).pop() ?? tests.find((x) => x.date <= addDays(s.from, 6));
+    const after = tests.filter((x) => x.date >= addDays(s.from, 21) && x.date <= addDays(s.to, 7)).pop();
+    if (before && after && before !== after) lines.push(`Güç testi: ${compareTests(before, after).join(' · ')}`);
     const tips = [];
     if (!current) {
       if (s.rate < 0.8) tips.push('Antrenman oranı %80\'in altında: takvimi gerçekçi hale getir; 2 gün de yeterli bir başlangıç.');
@@ -225,6 +255,7 @@ export function renderProgress(root) {
     waistSection(from),
     sessionsSection(weeksN),
     exerciseSection(from, rerender),
+    testsSection(),
     weeklyTable(Math.min(weeksN, 12)),
   );
   const bs = blockSection();

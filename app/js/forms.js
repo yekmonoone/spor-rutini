@@ -1,9 +1,12 @@
-// Kayıt formları (günlük, padel, ölçüm) ve yedekleme akışları.
+// Kayıt formları (günlük, padel, ölçüm, güç testi) ve yedekleme akışları.
 import { state, saveDaily, deleteDaily, saveRecord, deleteRecord, dumpRaw, importBackup, updateMeta } from './store.js';
 import { h, openSheet, confirmSheet, toast, field, numInput, textInput, segmented, chips, checkbox } from './ui.js';
 import { dateKey, parseNum, uid, fmtDate, fmtNum } from './util.js';
 import { PAIN_AREAS } from './rules.js';
 import { buildBackup, backupFileName, validateBackup, countRecords } from './backup.js';
+import { EX } from './exercises.js';
+import { stopwatch } from './timer.js';
+import { whtr } from './targets.js';
 import { isIOS, isTouch } from './env.js';
 
 const SCALE = [1, 2, 3, 4, 5].map((v) => ({ value: v, label: String(v), allowNone: true }));
@@ -159,6 +162,13 @@ export function openMeasureForm(rec = null) {
   const dateIn = dateInput(r.date);
   const waist = numInput({ value: r.waistCm, decimal: true, placeholder: 'ör. 92,5' });
   const photo = checkbox('Aylık fotoğrafımı da çektim (telefonda kalır)', !!r.photo);
+  const ratioHint = h('div', { class: 'hint' });
+  const showRatio = () => {
+    const w = whtr(parseNum(waist.value), state.profile?.heightCm);
+    ratioHint.textContent = w ? `Bel/boy ${fmtNum(w.ratio, 2)} (${w.label}) · sağlıklı aralık için bel < ${fmtNum(w.targetWaist)} cm` : '';
+  };
+  waist.addEventListener('input', showRatio);
+  showRatio();
   const note = textInput({ value: r.note ?? '', placeholder: 'İsteğe bağlı', multiline: true });
   let sheet;
 
@@ -193,6 +203,7 @@ export function openMeasureForm(rec = null) {
     content: h('div', { class: 'form' },
       field('Tarih', dateIn),
       field('Bel çevresi (cm)', waist, 'Sabah, göbek hizasından, nefes verdikten sonra; mezura gergin ama sıkmadan.'),
+      ratioHint,
       photo,
       field('Not', note)),
     actions,
@@ -250,4 +261,101 @@ export function importBackupFlow() {
   });
   document.body.append(input);
   input.click();
+}
+
+/* ---------- Güç testi (4 haftada bir, ~5 dk) ---------- */
+export function openTestForm(rec = null) {
+  const r = rec ?? { id: uid(), date: dateKey(), kind: 'test' };
+  const prev = [...state.measurements].reverse().find((m) => m.kind === 'test' && m.id !== r.id);
+  const dateIn = dateInput(r.date);
+  const levels = EX.pushup.variants;
+  const level = segmented(levels.map((v) => ({ value: v, label: v })), r.pushupLevel ?? prev?.pushupLevel ?? levels[2]);
+  level.classList.add('wrap');
+  const pushReps = numInput({ value: r.pushupReps ?? null, placeholder: 'tekrar' });
+  const plank = numInput({ value: r.plankSec ?? null, placeholder: 'saniye' });
+  const squat = numInput({ value: r.squat60 ?? null, placeholder: 'tekrar' });
+  const note = textInput({ value: r.note ?? '', placeholder: 'İsteğe bağlı', multiline: true });
+
+  const watches = [];
+  function timerBtn(input, { limit = null, idle }) {
+    const sw = stopwatch();
+    watches.push(sw);
+    const b = h('button', { type: 'button', class: 'btn small', text: idle });
+    const stopIt = () => {
+      const sec = sw.stop();
+      b.textContent = idle;
+      return sec;
+    };
+    b.addEventListener('click', () => {
+      if (sw.running) {
+        const sec = stopIt();
+        if (!limit) input.value = String(sec);
+        return;
+      }
+      sw.start((s) => {
+        if (limit) {
+          const left = Math.max(0, limit - s);
+          b.textContent = `⏱ ${left} sn — durdur`;
+          if (left === 0) {
+            stopIt();
+            navigator.vibrate?.(400);
+            toast('Süre doldu — tekrar sayını yaz');
+            input.focus();
+          }
+        } else b.textContent = `⏱ ${s} sn — durdur`;
+      });
+    });
+    return b;
+  }
+
+  let sheet;
+  const save = async () => {
+    try {
+      if (!dateIn.value) throw new Error('Tarih seç.');
+      const pushupReps = readNum(pushReps, { label: 'Şınav', min: 0, max: 200, integer: true });
+      const plankSec = readNum(plank, { label: 'Plank', min: 0, max: 900, integer: true });
+      const squat60 = readNum(squat, { label: 'Squat', min: 0, max: 150, integer: true });
+      if (pushupReps == null && plankSec == null && squat60 == null) throw new Error('En az bir test sonucunu gir.');
+      await saveRecord('measurements', {
+        ...r, kind: 'test', date: dateIn.value,
+        pushupLevel: pushupReps == null ? null : level.getValue(), pushupReps, plankSec, squat60, note: note.value.trim(),
+      });
+      sheet.close();
+      toast('Güç testi kaydedildi 🏅');
+    } catch (err) {
+      toast(err.message);
+    }
+  };
+
+  const actions = [saveBtn(save)];
+  if (rec) {
+    actions.unshift(h('button', {
+      type: 'button', class: 'btn danger-ghost', text: 'Sil', onClick: async () => {
+        if (await confirmSheet({ title: 'Testi sil', message: 'Bu test silinsin mi?', confirmLabel: 'Sil', danger: true })) {
+          await deleteRecord('measurements', rec.id);
+          sheet.close();
+          toast('Silindi');
+        }
+      },
+    }));
+  }
+
+  const last = (v, unit = '') => (prev && v != null ? `Geçen test: ${v}${unit}` : null);
+  sheet = openSheet({
+    title: rec ? 'Güç testi' : 'Güç testi (~5 dk)',
+    content: h('div', { class: 'form' },
+      h('p', { class: 'muted', text: 'Isındıktan sonra, aralarda 1–2 dk dinlenerek yap. Her seferinde aynı koşullar (saat, zemin) karşılaştırmayı anlamlı kılar.' }),
+      field('Tarih', dateIn),
+      h('div', { class: 'field' },
+        h('label', { text: 'Şınav seviyesi' }), level,
+        h('div', { class: 'hint', text: 'Form bozulmadan 10+ yapabildiğin en zor seviye.' })),
+      field('Şınav — temiz tekrar (form bozulunca dur)', pushReps, last(prev?.pushupReps == null ? null : `${prev.pushupLevel ?? ''} ${prev.pushupReps}`.trim())),
+      field('Plank — maksimum süre (sn)', plank, last(prev?.plankSec, ' sn') ?? 'Kalça düşünce ya da bel çukurlaşınca bitir.'),
+      timerBtn(plank, { idle: '⏱ Kronometreyi başlat' }),
+      field('Squat — 1 dakikada tekrar', squat, last(prev?.squat60) ?? 'Kalça diz hizasına insin, tam kalk.'),
+      timerBtn(squat, { limit: 60, idle: '⏱ 60 sn sayacı başlat' }),
+      field('Not', note)),
+    actions,
+    onClose: () => { for (const w of watches) if (w.running) w.stop(); },
+  });
 }

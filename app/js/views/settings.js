@@ -6,12 +6,30 @@ import { WEEKDAYS, fmtDate } from '../util.js';
 import { APP_VERSION } from '../version.js';
 import { isIOS, isStandalone } from '../env.js';
 import { exportBackupFlow, importBackupFlow } from '../forms.js';
-import { go } from '../context.js';
+import { go, maintenanceOn, setMaintenance, targetsToday, today } from '../context.js';
+import { IFTHEN_TRIGGERS } from '../ifthen.js';
 import { profileForm } from './profile-form.js';
 import { installHint } from './onboarding.js';
 import { syncCard } from './sync-card.js';
 import { isConnected, signOut } from '../sync.js';
 import { AI_TARGETS } from '../ai.js';
+
+function habitsCard() {
+  const t = today();
+  const on = maintenanceOn(t);
+  const p = targetsToday(t) ?? {};
+  const plans = state.settings.ifThen ?? [];
+  return card(
+    h('h2', { text: 'Bakım dönemi ve planlar' }),
+    h('p', { class: 'small', text: on
+      ? `🌿 Bakım dönemi ${fmtDate(state.settings.maintenanceUntil)} tarihine kadar: ${p.kcalMin ?? '?'}–${p.kcalMax ?? '?'} kcal (tahmini harcaman).`
+      : 'Bakım dönemi: 2 hafta tahmini harcaman kadar yemek (diyet arası). Uygulama 12 haftada bir önerir; istediğinde de başlatabilirsin.' }),
+    btn(on ? 'Bakımı bitir' : 'Bakım dönemini başlat (2 hafta)', () => setMaintenance(!on), on ? 'small' : 'small ghost'),
+    h('p', { class: 'small', text: plans.length
+      ? `📌 Eğer–o zaman planların: ${plans.map((x) => IFTHEN_TRIGGERS[x.trigger]?.when.toLocaleLowerCase('tr-TR')).join(' · ')}`
+      : '📌 Henüz eğer–o zaman planın yok.' }),
+    btn('Haftalık kontrolü aç', () => go('/haftalik'), 'small'));
+}
 
 function aiCard() {
   const s = state.settings;
@@ -96,6 +114,7 @@ export function renderSettings(root) {
       h('h3', { text: 'Haftalık takvim' }),
       schedule,
       h('div', { class: 'grid2' }, field('Set arası dinlenme', rest), h('div', { class: 'field end' }, sound))),
+    habitsCard(),
     syncCard(),
     card(
       h('h2', { text: 'Yedekleme' }),

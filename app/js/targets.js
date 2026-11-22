@@ -1,5 +1,5 @@
 // Kalori ve protein hedefleri (Mifflin-St Jeor + aktivite katsayısı). Tahmindir; tartı trendiyle ayarlanır.
-import { roundTo } from './util.js';
+import { addDays, roundTo } from './util.js';
 
 export const ACTIVITY = [
   { value: 1.2, label: 'Az hareketli', desc: 'Masa başı, düzenli egzersiz yok' },
@@ -47,4 +47,44 @@ export function computeTargets(p, now = new Date()) {
     lossMaxKg: roundTo(p.weightKg * 0.01, 0.1),
     bmi: bmi(p.weightKg, p.heightCm),
   };
+}
+
+/** Bel/boy oranı ve NICE (NG246) sınıfı. */
+export function whtr(waistCm, heightCm) {
+  if (!(waistCm > 0) || !(heightCm > 0)) return null;
+  const ratio = waistCm / heightCm;
+  const level = ratio < 0.4 ? 'low' : ratio < 0.5 ? 'healthy' : ratio < 0.6 ? 'increased' : 'high';
+  const label = { low: 'düşük', healthy: 'sağlıklı aralık', increased: 'artmış risk', high: 'yüksek risk' }[level];
+  return { ratio: Math.round(ratio * 100) / 100, level, label, targetWaist: Math.round(heightCm * 5) / 10 };
+}
+
+/** Bakım (diyet arası) haftasında mı? settings.maintenanceUntil = son gün. */
+export function inMaintenance(settings, date) {
+  return !!settings?.maintenanceUntil && date <= settings.maintenanceUntil;
+}
+
+/** Bakım döneminde kalori hedefi = tahmini harcama ±50; aksi halde profildeki hedefler. */
+export function effectiveTargets(profile, settings, date, now = new Date()) {
+  if (!profile) return null;
+  if (!inMaintenance(settings, date)) return { ...profile, maintenance: false };
+  const t = computeTargets(profile, now);
+  if (!t) return { ...profile, maintenance: true };
+  return { ...profile, kcalMin: roundTo(t.tdee - 50, 50), kcalMax: roundTo(t.tdee + 50, 50), maintenance: true };
+}
+
+/** Hafta (Pazartesi anahtarı) bakım dönemiyle kesişiyor mu? (seri hesabında o hafta sayılmaz ama zinciri kırmaz) */
+export function maintenanceWeek(settings, weekKey) {
+  const from = settings?.maintenanceFrom;
+  const until = settings?.maintenanceUntil;
+  if (!from || !until || from > until) return false; // aynı gün iptal edilen bakım
+  return weekKey <= until && addDays(weekKey, 6) >= from;
+}
+
+/** Kalori hedefini delta kadar kaydırır; tabanın altına inmez. Yeni { kcalMin, kcalMax } ya da null döner. */
+export function calibrate(profile, delta) {
+  if (!profile?.kcalMin || !profile?.kcalMax || !Number.isFinite(delta)) return null;
+  const floor = profile.kcalFloor ?? 0;
+  const shift = Math.max(delta, floor - profile.kcalMin);
+  if (shift === 0) return null;
+  return { kcalMin: profile.kcalMin + shift, kcalMax: profile.kcalMax + shift, shift };
 }

@@ -1,6 +1,6 @@
 // Çevrimdışı çalışma: uygulama dosyaları sürüm adlı bir önbellekte tutulur.
 // Bir dosya ekleyip çıkarınca ASSETS listesini, sürümü değiştirince VERSION'ı güncelle (testler kontrol eder).
-const VERSION = '0.5.0';
+const VERSION = '0.6.0';
 const CACHE = `spor-rutini-${VERSION}`;
 const ASSETS = [
   './',
@@ -39,6 +39,8 @@ const ASSETS = [
   './js/views/assistant.js',
   './js/views/history.js',
   './js/views/meals.js',
+  './js/views/checkin.js',
+  './js/ifthen.js',
   './js/views/onboarding.js',
   './js/views/profile-form.js',
   './js/views/program.js',

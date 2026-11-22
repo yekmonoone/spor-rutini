@@ -5,8 +5,8 @@ import { EX, PHASES, resistanceText, unitSuffix } from '../program.js';
 import { PAIN_AREAS } from '../rules.js';
 import { addDays, fmtDate, fmtDateLong, fmtNum } from '../util.js';
 import { today } from '../context.js';
-import { openDailyForm, openPadelForm, openMeasureForm } from '../forms.js';
-import { editWorkout } from './active.js';
+import { openDailyForm, openPadelForm, openMeasureForm, openTestForm } from '../forms.js';
+import { editWorkout, EFFORTS } from './active.js';
 
 let filter = 'all';
 let windowDays = 60;
@@ -58,7 +58,10 @@ function entryRow(entry) {
   if (entry.kind === 'workout') {
     icon = '💪';
     title = r.day === 'A' || r.day === 'B' ? `Gün ${r.day} antrenmanı` : 'Antrenman';
-    sub = [r.durationMin ? `${r.durationMin} dk` : null, `${doneSets(r)} set`, PHASES[r.phase]?.label].filter(Boolean).join(' · ');
+    const pain = (r.pain ?? []).map((k) => PAIN_AREAS[k]?.toLocaleLowerCase('tr-TR')).filter(Boolean);
+    const effort = EFFORTS.find((e) => e.value === r.effort)?.label;
+    sub = [r.durationMin ? `${r.durationMin} dk` : null, `${doneSets(r)} set`, PHASES[r.phase]?.label,
+      effort ? effort.toLocaleLowerCase('tr-TR') : null, pain.length ? `ağrı: ${pain.join(', ')}` : null].filter(Boolean).join(' · ');
     onClick = () => openWorkoutDetail(r);
   } else if (entry.kind === 'daily') {
     icon = '📝';
@@ -80,6 +83,12 @@ function entryRow(entry) {
     const pain = (r.pain ?? []).map((k) => PAIN_AREAS[k]?.toLocaleLowerCase('tr-TR')).filter(Boolean);
     sub = [r.durationMin ? `${r.durationMin} dk` : null, r.feel ? `his ${r.feel}/5` : null, pain.length ? `ağrı: ${pain.join(', ')}` : null].filter(Boolean).join(' · ') || '—';
     onClick = () => openPadelForm(r);
+  } else if (r.kind === 'test') {
+    icon = '🏅';
+    title = 'Güç testi';
+    sub = [r.pushupReps != null ? `şınav ${r.pushupLevel ? `(${r.pushupLevel.toLocaleLowerCase('tr-TR')}) ` : ''}${r.pushupReps}` : null,
+      r.plankSec != null ? `plank ${r.plankSec} sn` : null, r.squat60 != null ? `squat ${r.squat60}/dk` : null].filter(Boolean).join(' · ') || '—';
+    onClick = () => openTestForm(r);
   } else {
     icon = '📏';
     title = 'Ölçüm';

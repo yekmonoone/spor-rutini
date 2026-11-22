@@ -3,14 +3,18 @@
 // Saf fonksiyonlar — testlerde de kullanılır.
 import { EX, PHASES, DAY_TYPES, programFor, programWeek, blockOf, targetText, plannedSets, resistanceText } from './program.js';
 import { weeklyAverages, weeklySessions, exerciseHistory, trackedItems, valuesInRange } from './stats.js';
-import { ageFromBirthYear } from './targets.js';
+import { ageFromBirthYear, effectiveTargets, inMaintenance } from './targets.js';
+import { IFTHEN_TRIGGERS } from './ifthen.js';
 import { addDays, avg, fmtDate, fmtNum, weekStart, weekday, WEEKDAYS } from './util.js';
 import { PAIN_AREAS } from './rules.js';
 import { extractJson } from './extract-json.js';
 import { MEALS, OUT_OPTIONS, TOOLS } from './foods.js';
 import { defaultPrefs, buildDefaultPlan, mealNutrition, dayFor, mealById, mealsWithoutNewGroceries, OUT, SLOTS, SLOT_LABELS } from './mealplan.js';
 import { dayPlanFor } from './program.js';
-import { isStrength } from './stats.js';
+import { isStrength, testHistory, compareTests } from './stats.js';
+
+const EFFORT_TR = { easy: 'kolay', good: 'iyi', hard: 'çok zor' };
+const painText = (r) => (r.pain ?? []).map((k) => PAIN_AREAS[k]).filter(Boolean).join(', ');
 
 export const AI_TARGETS = {
   claude: { label: 'Claude', url: 'https://claude.ai/new' },
@@ -49,9 +53,10 @@ function todaySection(state, today) {
   const r = state.daily[today] ?? {};
   const plan = dayPlanFor(state.settings, today, weekday(today));
   const w = state.workouts.filter((x) => x.date === today && isStrength(x)).pop();
-  const workout = w ? `yapıldı (Gün ${w.day}${w.short ? ', kısa' : ''})` : r.workoutSkipped ? 'yapılamadı' : 'kaydedilmedi';
+  const wFb = w ? [EFFORT_TR[w.effort] ? `zorluk: ${EFFORT_TR[w.effort]}` : null, painText(w) ? `ağrı: ${painText(w)}` : null].filter(Boolean).join(', ') : '';
+  const workout = w ? `yapıldı (Gün ${w.day}${w.short ? ', kısa' : ''}${wFb ? `; ${wFb}` : ''})` : r.workoutSkipped ? 'yapılamadı' : 'kaydedilmedi';
   const eaten = Object.entries(r.meals ?? {}).map(([slot, m]) => `${SLOT_LABELS[slot] ?? 'Ek'}: ${m.name}${m.free ? ' (plan dışı)' : ''} ~${m.protein} g`);
-  const p = state.profile ?? {};
+  const p = effectiveTargets(state.profile, state.settings, today) ?? {};
   return [
     `- Planlanan gün: ${DAY_TYPES[plan.type]?.label ?? plan.type}. Antrenman: ${workout}. Yürüyüş: ${r.walked ? (r.brisk ? 'yapıldı (tempolu)' : 'yapıldı') : 'kaydedilmedi'}.`,
     `- Yenenler: ${eaten.length ? eaten.join('; ') : 'kaydedilmedi'}.`,
@@ -222,6 +227,30 @@ function exercisesSection(state) {
   return lines.length ? lines.join('\n') : 'Henüz kayıtlı antrenman yok.';
 }
 
+/** Son antrenmanların zorluk/ağrı geri bildirimi, güç testleri ve eğer–o zaman planları. */
+function feedbackSection(state, today) {
+  const lines = [];
+  const recent = state.workouts.filter((w) => isStrength(w) && w.date >= addDays(today, -21)).slice(-6);
+  const fb = recent.filter((w) => w.effort || (w.pain ?? []).length)
+    .map((w) => `${fmtDate(w.date)} Gün ${w.day}: ${[EFFORT_TR[w.effort], painText(w) ? `ağrı: ${painText(w)}` : null].filter(Boolean).join(', ')}`);
+  lines.push(`- Antrenman sonrası his: ${fb.length ? fb.join('; ') : 'kayıt yok'}`);
+  const tests = testHistory(state.measurements);
+  if (tests.length) {
+    const last = tests[tests.length - 1];
+    const parts = [
+      last.pushupReps != null ? `şınav (${last.pushupLevel ?? '?'}) ${last.pushupReps}` : null,
+      last.plankSec != null ? `plank ${last.plankSec} sn` : null,
+      last.squat60 != null ? `1 dk squat ${last.squat60}` : null,
+    ].filter(Boolean);
+    lines.push(`- Son güç testi (${fmtDate(last.date)}): ${parts.join(', ')}`);
+    if (tests.length > 1) lines.push(`- İlk testten bu yana: ${compareTests(tests[0], last).join('; ')}`);
+  }
+  if (inMaintenance(state.settings, today)) lines.push(`- Şu an bakım (diyet arası) dönemindeyim: ${fmtDate(state.settings.maintenanceUntil)} tarihine kadar tahmini harcama kadar yiyorum.`);
+  const plans = (state.settings.ifThen ?? []).map((x) => `"${IFTHEN_TRIGGERS[x.trigger]?.when ?? x.trigger}" → ${x.text}`);
+  if (plans.length) lines.push(`- Eğer–o zaman planlarım: ${plans.join('; ')}`);
+  return lines.join('\n');
+}
+
 function padelSection(state, today) {
   const recent = state.padel.filter((p) => p.date >= addDays(today, -28));
   if (!recent.length) return 'Son 4 haftada padel yok.';
@@ -301,6 +330,8 @@ export function buildPrompt(kind, { state, today, startKey, alerts = [], questio
     `## Hareketler (son 3 seans)\n${exercisesSection(state)}`,
     '',
     `## Padel\n${padelSection(state, today)}`,
+    '',
+    `## Geri bildirim ve testler\n${feedbackSection(state, today)}`,
     '',
     `## Yemek düzeni\n${mealsSection(state, today)}`,
     '',

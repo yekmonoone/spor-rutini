@@ -1,12 +1,25 @@
 // Kural tabanlı uyarılar (yapay zekâ gerektirmez). Her kural saf bir fonksiyondur.
 // Uyarı: { id, level: 'warn'|'info'|'success', icon, title, body, action?: { label, to } }
-// action.to: bir sayfa yolu ('/antrenman') ya da 'form:daily' | 'form:padel' | 'form:measure' | 'backup'
+// action.to: bir sayfa yolu ('/antrenman') ya da 'form:daily' | 'form:padel' | 'form:measure' | 'form:test' | 'backup'
+//            | 'kcal:-150' / 'kcal:+150' (kalori hedefini ayarla) | 'maint:on' / 'maint:off' (bakım haftası)
 import { addDays, avg, daysBetween, fmtNum, weekStart, weekday } from './util.js';
 import { EX, WEEKLY_STRENGTH_MIN, WEEKLY_STRENGTH_TARGET, blockOf, programFor, programWeek, progressionHint } from './program.js';
-import { countInWeek, isStrength, progressionDue, trackedItems, valuesInRange, weeklyAverages } from './stats.js';
+import { countInWeek, isStrength, isTest, progressionDue, trackedItems, valuesInRange, weeklyAverages } from './stats.js';
+import { inMaintenance } from './targets.js';
 import { shoppingList, shoppingCycle, countShopping } from './mealplan.js';
 
-export const PAIN_AREAS = { elbow: 'Dirsek', shoulder: 'Omuz', knee: 'Diz', back: 'Bel' };
+export const PAIN_AREAS = { elbow: 'Dirsek', shoulder: 'Omuz', wrist: 'Bilek', knee: 'Diz', back: 'Bel' };
+
+/** Kalibrasyondan ya da bakımdan sonra kilo hızı uyarıları 14 gün susar (yeni hedefin etkisi görülsün). */
+export const CALIBRATION_QUIET_DAYS = 14;
+
+export function weightQuiet({ settings, meta, today }) {
+  if (inMaintenance(settings, today)) return true;
+  const end = settings?.maintenanceUntil;
+  if (end && daysBetween(end, today) < CALIBRATION_QUIET_DAYS) return true;
+  const cal = meta?.lastCalibration?.date;
+  return !!cal && daysBetween(cal, today) < CALIBRATION_QUIET_DAYS;
+}
 
 const LEVEL_ORDER = { warn: 0, info: 1, success: 2 };
 
@@ -92,7 +105,9 @@ function sleepLow({ daily, today }) {
   };
 }
 
-function weightRate({ daily, today, profile }) {
+function weightRate(ctx) {
+  const { daily, today, profile } = ctx;
+  if (weightQuiet(ctx)) return [];
   const cur = weekStart(today);
   const weeks = weeklyAverages(daily, 'weight', { minN: 2 }).filter((w) => w.week < cur);
   const out = [];
@@ -108,8 +123,8 @@ function weightRate({ daily, today, profile }) {
           level: 'warn',
           icon: '⚖️',
           title: 'Kilo çok hızlı düşüyor',
-          body: `Geçen hafta ortalaman ${fmtNum(loss)} kg (%${fmtNum(pct)}) düştü. Hedef haftada %0,5–1. Kas kaybını önlemek için günlük kaloriyi ~150–200 kcal artır, protein hedefini koru.`,
-          action: { label: 'Hedefleri aç', to: '/ayarlar' },
+          body: `Geçen hafta ortalaman ${fmtNum(loss)} kg (%${fmtNum(pct)}) düştü. Hedef haftada %0,5–1. Kas kaybını önlemek için günlük kaloriyi ~150 kcal artır, protein hedefini koru.`,
+          action: profile?.kcalMin ? { label: 'Hedefi +150 kcal yap', to: 'kcal:+150' } : { label: 'Hedefleri aç', to: '/ayarlar' },
         });
       }
     }
@@ -131,7 +146,7 @@ function weightRate({ daily, today, profile }) {
           icon: '⚖️',
           title: perWeek >= 0 ? 'Kilo kaybı yavaş' : 'Kilo son 3 haftada arttı',
           body: `Son 3 haftada ${trend}. ${advice} Kreatine yeni başladıysan ilk haftalardaki 0,5–1 kg su tutumunu hesaba kat.`,
-          action: { label: 'Hedefleri aç', to: '/ayarlar' },
+          action: canCut && profile?.kcalMin ? { label: 'Hedefi −150 kcal yap', to: 'kcal:-150' } : { label: 'Hedefleri aç', to: '/ayarlar' },
         });
       }
     }
@@ -139,27 +154,101 @@ function weightRate({ daily, today, profile }) {
   return out;
 }
 
-function padelPain({ padel, today }) {
-  const recent = padel.filter((p) => {
-    const d = daysBetween(p.date, today);
-    return d >= 0 && d <= 21;
-  });
+/** Aynı bölgede son 3 haftada ≥2 kez ağrı (padel + antrenman). */
+function painRepeat({ padel, workouts = [], today }) {
+  const recent = [...padel.map((p) => ({ ...p, src: 'padel' })), ...workouts.map((w) => ({ ...w, src: 'workout' }))]
+    .filter((r) => {
+      const d = daysBetween(r.date, today);
+      return d >= 0 && d <= 21 && Array.isArray(r.pain) && r.pain.length;
+    })
+    .sort((a, b) => (a.date < b.date ? -1 : 1));
   const out = [];
   for (const [key, label] of Object.entries(PAIN_AREAS)) {
-    const hits = recent.filter((p) => Array.isArray(p.pain) && p.pain.includes(key));
+    const hits = recent.filter((r) => r.pain.includes(key));
     if (hits.length < 2) continue;
     const lower = label.toLocaleLowerCase('tr-TR');
+    const nPadel = hits.filter((r) => r.src === 'padel').length;
+    const where = nPadel === hits.length ? 'padel seansında' : nPadel === 0 ? 'antrenmanda' : 'seansta (padel + antrenman)';
     out.push({
       id: `pain-${key}@${hits[hits.length - 1].date}`,
       level: 'warn',
       icon: '🩹',
       title: `${label} ağrısı tekrarlıyor`,
-      body: `Son 3 haftada ${hits.length} padel seansında ${lower} ağrısı işaretledin. 1–2 seans ara ver ya da süreyi kısalt. `
-        + (key === 'elbow' ? 'Raketinin yumuşak ve hafif olduğundan emin ol, tekniğini hocana kontrol ettir; bilek ekstansiyonuna devam et. ' : '')
+      body: `Son 3 haftada ${hits.length} ${where} ${lower} ağrısı işaretledin. 1–2 seans o bölgeyi zorlayan hareketleri hafiflet ya da süreyi kısalt. `
+        + (key === 'elbow' && nPadel ? 'Raketinin yumuşak ve hafif olduğundan emin ol, tekniğini hocana kontrol ettir; bilek ekstansiyonuna devam et. ' : '')
         + 'Ağrı sürerse ya da artarsa bir fizyoterapiste veya hekime danış.',
     });
   }
   return out;
+}
+
+/** Son iki kuvvet antrenmanı "çok zor" geldiyse. */
+function effortHard({ workouts, today }) {
+  const last = workouts.filter((w) => isStrength(w) && w.effort).slice(-2);
+  if (last.length < 2 || !last.every((w) => w.effort === 'hard')) return null;
+  if (daysBetween(last[1].date, today) > 10) return null;
+  return {
+    id: `effort@${last[1].date}`,
+    level: 'info',
+    icon: '🥵',
+    title: 'Son iki antrenman çok zor geldi',
+    body: 'Bir sonraki seansta her harekette 1 set az yap ya da bir kolay seviyeye dön; setleri bitirdiğinde 2–3 tekrar daha yapabilecek gibi hissetmelisin. Uyku ve protein de toparlanmayı etkiler.',
+  };
+}
+
+/** 4 haftada bir 5 dakikalık güç testi. */
+function testDue({ measurements, today, startKey }) {
+  if (!startKey) return null;
+  const tests = measurements.filter(isTest);
+  const last = tests.length ? tests[tests.length - 1] : null;
+  if (!last) {
+    if (daysBetween(startKey, today) < 14) return null; // ilk iki hafta başlangıç kartı hatırlatır
+  } else if (programWeek(startKey, today) < 5 || daysBetween(last.date, today) < 26) return null;
+  return {
+    id: `test@${last ? last.date : 'first'}`,
+    level: 'info',
+    icon: '🏅',
+    title: last ? '4 haftalık güç testi zamanı' : 'İlk güç testini yap',
+    body: '5 dakika: şınav (temiz tekrar), plank (süre) ve 1 dakikada squat. Aynı koşullarda tekrarlarsan ilerlemeni net görürsün.',
+    action: { label: 'Testi yap', to: 'form:test' },
+  };
+}
+
+/** Haftalık kontrolün ait olduğu hafta: Pazar → bu hafta, Pazartesi → geçen hafta, diğer günler null. */
+export function checkinWeek(today) {
+  const wd = weekday(today);
+  if (wd === 6) return weekStart(today);
+  if (wd === 0) return addDays(weekStart(today), -7);
+  return null;
+}
+
+function checkinDue({ meta, today, startKey }) {
+  const wk = checkinWeek(today);
+  if (!wk || (startKey && startKey > addDays(wk, 6))) return null;
+  if (meta?.lastCheckin && meta.lastCheckin >= wk) return null;
+  return {
+    id: `checkin@${wk}`,
+    level: 'info',
+    icon: '🗓️',
+    title: 'Haftalık kontrol (3 dk)',
+    body: 'Haftanı özetle, gerekirse kaloriyi ayarla, gelecek haftayı ve "eğer–o zaman" planlarını gözden geçir.',
+    action: { label: 'Kontrolü aç', to: '/haftalik' },
+  };
+}
+
+/** Program haftası 13'te (sonra her 12 haftada) 2 haftalık bakım kalorisi önerisi. */
+function maintenanceSuggest({ settings, today, startKey, profile }) {
+  if (!startKey || !profile?.kcalMin || inMaintenance(settings, today)) return null;
+  const week = programWeek(startKey, today);
+  if (week < 13 || (week - 13) % 12 !== 0) return null;
+  return {
+    id: `maint@${week}`,
+    level: 'info',
+    icon: '🌿',
+    title: 'İstersen 2 hafta bakım kalorisi',
+    body: '12 haftadır kalori açığındasın. 2 hafta tahmini harcaman kadar yemek (diyet arası) açlığı ve yorgunluğu azaltabilir; araştırmalarda toplam yağ kaybı sürekli diyete benzer. Antrenmana aynen devam.',
+    action: { label: 'Bakım haftalarını başlat', to: 'maint:on' },
+  };
 }
 
 function progression({ workouts, settings }) {
@@ -300,8 +389,9 @@ function shoppingDay({ mealplan, shopping, today }) {
 }
 
 export const RULES = [
-  strengthThisWeek, longGap, lastWeek, proteinLow, sleepLow, weightRate, padelPain,
-  progression, dumbbellTime, weighIns, stepsLow, measurementsDue, blockDone, shoppingDay, backupDue,
+  strengthThisWeek, longGap, lastWeek, proteinLow, sleepLow, weightRate, painRepeat, effortHard,
+  progression, dumbbellTime, weighIns, stepsLow, measurementsDue, testDue, blockDone, maintenanceSuggest,
+  checkinDue, shoppingDay, backupDue,
 ];
 
 /**

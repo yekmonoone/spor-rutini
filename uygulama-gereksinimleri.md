@@ -1,6 +1,6 @@
 # Spor Takip Uygulaması — Gereksinimler
 
-> Durum: **1., 2. ve 3. aşama + yemek düzeni + gün akışı geliştirildi** (sürüm 0.5.0, yayında: https://yekmonoone.github.io/spor-rutini/ — eşitleme için Supabase projesi kurulmalı: [supabase/KURULUM.md](supabase/KURULUM.md)) · Rutin için: [spor-rutini-plani.md](spor-rutini-plani.md) · Çalıştırma: [README.md](README.md)
+> Durum: **1., 2. ve 3. aşama + yemek düzeni + gün akışı + haftalık kontrol ve ölçüm temeli geliştirildi** (sürüm 0.6.0, yayında: https://yekmonoone.github.io/spor-rutini/ — eşitleme için Supabase projesi kurulmalı: [supabase/KURULUM.md](supabase/KURULUM.md)) · Rutin için: [spor-rutini-plani.md](spor-rutini-plani.md) · Çalıştırma: [README.md](README.md)
 
 ## 1. Amaç
 Verileri ve ilerlemeyi düzenli tutmak; isteğe bağlı AI ile konuşmak; uyarı ve öneri almak; önümüzdeki dönem için program oluşturmak.
@@ -38,6 +38,12 @@ Verileri ve ilerlemeyi düzenli tutmak; isteğe bağlı AI ile konuşmak; uyarı
   - Padel sonrası tekrarlayan dirsek/omuz ağrısı → dinlenme + uzmana danış uyarısı.
   - Bel ölçümü / fotoğraf zamanı.
 - **Program dönemleri:** 4 haftalık bloklar, blok sonu değerlendirme, band → dambıl geçişi.
+- **0.6.0 — düzenli takip için:**
+  - Ölçüm temeli: trend kilo (7 günlük ortalama), bel/boy oranı (NICE NG246: < 0,5), 4 haftada bir güç testi (`measurements`, `kind: 'test'`), ilk 14 gün başlangıç değerlendirmesi.
+  - Haftalık kontrol (`#/haftalik`, `meta.lastCheckin`) ve eğer–o zaman planları (`settings.ifThen`, en fazla 3; Singh 2024 alışkanlık medyanı ~59–66 gün, uygulama niyetleri d≈0,24–0,31).
+  - Antrenman sonrası zorluk/ağrı (`workout.effort`, `workout.pain`), bakım dönemi (`settings.maintenanceFrom/Until`, kalori = tahmini harcama ±50).
+  - Alışkanlık: aktif gün / 66 ve haftalık seri (≥2 kuvvet; bakım haftası zinciri kırmaz). Günlük seri/rozet yok.
+  - Sonraki (0.7.0): Web Push bildirimleri (ana ekran uygulaması + eşitleme).
 
 ## 5. AI özellikleri (anahtar açıksa)
 - **Sohbet:** profil + plan + son haftaların özeti bağlam olarak gönderilir.

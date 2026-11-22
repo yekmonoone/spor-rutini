@@ -185,3 +185,82 @@ export function blockSummary({ workouts, padel, daily, measurements }, startKey,
     tracked,
   };
 }
+
+/* ---------- Trend kilo ---------- */
+
+/** Son 7 günün (dahil) tartı ortalaması; en az 3 tartı yoksa null. Günlük su/tuz dalgalanmasını yumuşatır. */
+export function trendWeight(daily, date, { days = 7, minN = 3 } = {}) {
+  const v = valuesInRange(daily, 'weight', addDays(date, -(days - 1)), date);
+  return v.length >= minN ? avg(v) : null;
+}
+
+/** Haftalık trend değişimi (kg): trend(bugün) − trend(7 gün önce). Negatif = kayıp. */
+export function trendRate(daily, date) {
+  const now = trendWeight(daily, date);
+  const before = trendWeight(daily, addDays(date, -7));
+  return now == null || before == null ? null : now - before;
+}
+
+/** Grafik için 7 günlük hareketli ortalama noktaları (yalnızca tartı olan günlerde). */
+export function movingAverageSeries(daily, from = null) {
+  return Object.values(daily)
+    .filter((r) => r.weight != null && (!from || r.date >= from))
+    .sort((a, b) => (a.date < b.date ? -1 : 1))
+    .map((r) => ({ date: r.date, value: trendWeight(daily, r.date) }))
+    .filter((p) => p.value != null)
+    .map((p) => ({ ...p, value: Math.round(p.value * 100) / 100 }));
+}
+
+/* ---------- Alışkanlık ---------- */
+
+/** Antrenman, yürüyüş ya da padel olan gün sayısı (sinceKey dahil). */
+export function activeDays({ workouts, padel, daily }, sinceKey) {
+  const days = new Set();
+  for (const w of workouts) if (!sinceKey || w.date >= sinceKey) days.add(w.date);
+  for (const p of padel) if (!sinceKey || p.date >= sinceKey) days.add(p.date);
+  for (const d of Object.values(daily)) if (d.walked && (!sinceKey || d.date >= sinceKey)) days.add(d.date);
+  return days.size;
+}
+
+export const HABIT_DAYS = 66;
+export const STREAK_MIN = 2;
+
+/**
+ * Haftalık seri: kuvvet ≥ 2 olan ardışık haftalar. Bu hafta henüz tamamlanmadıysa seriyi kırmaz;
+ * ≥2'ye ulaştıysa sayılır. Bakım haftaları (isMaintenanceWeek(weekKey) true) seriyi kırmaz ve sayılmaz.
+ */
+export function weeklyStreak(state, today, { startKey = null, isMaintenanceWeek = () => false } = {}) {
+  const cur = weekStart(today);
+  let streak = countInWeek(state.workouts, cur, isStrength) >= STREAK_MIN ? 1 : 0;
+  for (let wk = addDays(cur, -7); ; wk = addDays(wk, -7)) {
+    if (startKey && addDays(wk, 6) < startKey) break;
+    if (isMaintenanceWeek(wk)) continue;
+    if (countInWeek(state.workouts, wk, isStrength) >= STREAK_MIN) streak++;
+    else break;
+    if (streak > 520) break;
+  }
+  return streak;
+}
+
+/* ---------- Güç testleri ---------- */
+
+export const isTest = (m) => m?.kind === 'test';
+
+export function testHistory(measurements) {
+  return measurements.filter(isTest).sort((a, b) => (a.date < b.date ? -1 : 1));
+}
+
+/** İki test arasındaki fark metinleri (ör. "Şınav: Diz 12 → Tam 6"). */
+export function compareTests(a, b) {
+  if (!a || !b) return [];
+  const out = [];
+  const push = (label, x, y, fmt = (v) => v) => {
+    if (x == null && y == null) return;
+    out.push(`${label}: ${x == null ? '–' : fmt(x)} → ${y == null ? '–' : fmt(y)}`);
+  };
+  const pu = (t) => (t.pushupReps == null ? null : `${t.pushupLevel ?? ''} ${t.pushupReps}`.trim());
+  push('Şınav', pu(a), pu(b));
+  push('Plank', a.plankSec, b.plankSec, (v) => `${v} sn`);
+  push('Squat (1 dk)', a.squat60, b.squat60);
+  return out;
+}

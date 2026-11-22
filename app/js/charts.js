@@ -75,7 +75,8 @@ function placeTip(tip, wrap, x) {
  * series: [{ name, color, type: 'line'|'dots', points: [{ date, value, from?, to? }] }]
  * opts: { height, yFormat, unit, ariaLabel, empty }
  */
-export function timeChart({ series, height = 200, yFormat = (v) => fmtNum(v), ariaLabel = 'Grafik', empty = 'Henüz veri yok.' }) {
+/** ref: isteğe bağlı yatay referans çizgisi { value, label } (ör. bel/boy 0,5 hedefi). */
+export function timeChart({ series, height = 200, yFormat = (v) => fmtNum(v), ariaLabel = 'Grafik', empty = 'Henüz veri yok.', ref = null }) {
   const all = series.flatMap((se) => se.points);
   const wrap = h('div', { class: 'chart' });
   if (!all.length) {
@@ -88,6 +89,7 @@ export function timeChart({ series, height = 200, yFormat = (v) => fmtNum(v), ar
   let xTo = dates[dates.length - 1];
   if (xFrom === xTo) { xFrom = addDays(xFrom, -3); xTo = addDays(xTo, 3); }
   const values = all.map((p) => p.value);
+  if (ref && Number.isFinite(ref.value)) values.push(ref.value);
   const sc = niceScale(Math.min(...values), Math.max(...values), 4);
 
   const draw = (width) => {
@@ -113,6 +115,14 @@ export function timeChart({ series, height = 200, yFormat = (v) => fmtNum(v), ar
       svg.append(t);
     });
 
+    if (ref && Number.isFinite(ref.value)) {
+      svg.append(s('line', { x1: m.l, x2: width - m.r, y1: y(ref.value), y2: y(ref.value), 'stroke-width': 1.5, 'stroke-dasharray': '5 4' }, { stroke: 'var(--good)' }));
+      if (ref.label) {
+        const lbl = s('text', { x: width - m.r, y: y(ref.value) - 5, 'text-anchor': 'end', class: 'axis' });
+        lbl.textContent = ref.label;
+        svg.append(lbl);
+      }
+    }
     for (const se of series) {
       const pts = [...se.points].sort((a, b) => (a.date < b.date ? -1 : 1));
       if (se.type === 'line' && pts.length > 1) {
