@@ -108,6 +108,19 @@ export const EX = {
     ],
     harder: 'Tepede 3–4 sn bekle.',
   },
+  inverted_row: {
+    name: 'Sırt çekişi (Y-T / masa altı row)', muscle: 'Sırt, arka omuz, duruş', unit: 'reps', resist: 'none',
+    variants: ['Yüzüstü Y-T kaldırma', 'Masa altı row — dizler bükülü', 'Masa altı row — bacaklar düz'], defaultVariant: 0,
+    video: 'inverted row masa altı ters row evde',
+    how: [
+      'Y-T kaldırma: yüzüstü yat; kolları önce Y, sonra T şeklinde yerden birkaç cm kaldır, kürek kemiklerini sık, 2 sn tut.',
+      'Masa altı row: sağlam, ağır bir masanın altına sırt üstü gir, kenarını tut; vücut düz, göğsü masaya doğru çek, yavaş in.',
+      'Masa sallanıyor ya da devrilebilecek gibiyse row yapma — Y-T kaldırmada kal.',
+      'Ekipmansız dönemin sırt hareketi: şınavı dengeler, masa başı duruşuna karşı.',
+    ],
+    easier: 'Dizleri daha çok bük ya da Y-T kaldırmaya dön.',
+    harder: 'Bir üst seviyeye geç; tepede 1 sn bekle.',
+  },
   lateral_lunge: {
     name: 'Yana lunge', muscle: 'Bacak, kalça (padel hazırlığı)', unit: 'reps', side: 'taraf', resist: 'none',
     how: [
@@ -312,4 +325,65 @@ export const EX = {
       'Kalça önünde gerilme hissedince 30 sn tut; sonra diğer taraf.',
     ],
   },
+};
+
+// Video araması için daha iyi sonuç veren ifadeler (yoksa "<ad> nasıl yapılır").
+const VIDEO = {
+  pullup: 'negatif barfiks sandalye destekli barfiks nasıl yapılır',
+  db_rear_delt_fly: 'dumbbell reverse fly arka omuz nasıl yapılır',
+  db_wrist_ext: 'eksantrik bilek ekstansiyonu dambıl tenisçi dirseği egzersizi',
+  db_rdl: 'dambıl romanian deadlift nasıl yapılır',
+  db_glute_bridge: 'dambıl hip thrust glute bridge evde',
+  db_reverse_lunge: 'dambıl geriye lunge bulgar split squat nasıl yapılır',
+  band_face_pull: 'bant face pull nasıl yapılır',
+  monster_walk: 'monster walk mini bant nasıl yapılır',
+  hip_flexor_stretch: 'kalça fleksör esnetme diz çökerek',
+};
+for (const [id, q] of Object.entries(VIDEO)) if (EX[id] && !EX[id].video) EX[id].video = q;
+
+/** YouTube arama bağlantısı (uygulama video barındırmaz; yalnızca arama açar). */
+export function videoUrl(exId) {
+  const ex = EX[exId];
+  if (!ex) return null;
+  const q = ex.video ?? `${ex.name.split('(')[0].trim()} nasıl yapılır`;
+  return `https://www.youtube.com/results?search_query=${encodeURIComponent(q)}`;
+}
+
+/**
+ * Aynı işi gören alternatifler (ağrı, eksik ekipman ya da yer sorunu için o günlük değişim).
+ * Dönemde bulunmayan ekipmanı gerektirenler program.js `alternativesFor` ile elenir.
+ */
+export const ALTERNATIVES = {
+  squat: ['reverse_lunge', 'goblet_squat'],
+  goblet_squat: ['db_reverse_lunge', 'squat'],
+  band_squat: ['squat', 'goblet_squat'],
+  reverse_lunge: ['squat', 'lateral_lunge'],
+  db_reverse_lunge: ['goblet_squat', 'reverse_lunge'],
+  pushup: ['wide_pushup'],
+  wide_pushup: ['pushup'],
+  chair_dips: ['pushup'],
+  inverted_row: ['db_row', 'superman'],
+  superman: ['inverted_row'],
+  db_row: ['inverted_row', 'band_row'],
+  band_row: ['db_row', 'inverted_row'],
+  pullup: ['db_row', 'inverted_row', 'band_pulldown'],
+  band_pulldown: ['pullup', 'band_row', 'inverted_row'],
+  db_rdl: ['db_glute_bridge', 'single_leg_bridge'],
+  glute_bridge: ['single_leg_bridge', 'db_glute_bridge'],
+  single_leg_bridge: ['glute_bridge', 'db_glute_bridge'],
+  db_glute_bridge: ['db_rdl', 'glute_bridge'],
+  band_glute_bridge: ['glute_bridge', 'db_glute_bridge'],
+  db_shoulder_press: ['band_shoulder_press', 'pushup'],
+  band_shoulder_press: ['db_shoulder_press', 'pushup'],
+  db_lateral_raise: ['band_lateral_raise', 'db_shoulder_press', 'inverted_row'],
+  band_lateral_raise: ['db_lateral_raise'],
+  db_rear_delt_fly: ['band_face_pull', 'inverted_row'],
+  band_face_pull: ['db_rear_delt_fly', 'inverted_row'],
+  plank: ['side_plank'],
+  side_plank: ['plank'],
+  monster_walk: ['lateral_lunge'],
+  lateral_lunge: ['reverse_lunge'],
+  squat_jump: ['lateral_lunge'],
+  db_wrist_ext: ['band_wrist_ext'],
+  band_wrist_ext: ['db_wrist_ext'],
 };

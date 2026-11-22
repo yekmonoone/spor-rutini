@@ -1,12 +1,15 @@
 // Aktif antrenman ekranı: plan önceden dolu, set set kayıt, dinlenme sayacı. Taslak sürekli kaydedilir.
+// Süperset: aynı numaralı iki hareket sırayla (kısa geçiş), tur bitince dinlenme. Ekran açık kalır (Wake Lock).
 import { state, setKV, saveRecord } from '../store.js';
 import { h, appendChildren, btn, confirmSheet, toast, numInput, field, checkbox, openSheet, segmented, chips } from '../ui.js';
 import { PAIN_AREAS } from '../rules.js';
 import {
   EX, programFor, shortItems, BAND_LEVELS, warmupFor, COOLDOWN, plannedSets, programWeek, rirTarget,
   defaultResistance, resistanceText, targetText, progressionHint, unitSuffix,
+  alternativesFor, pairLabels, restAfterSet,
 } from '../program.js';
-import { lastPerformance, progressionDue } from '../stats.js';
+import { videoUrl } from '../exercises.js';
+import { lastPerformance, progressionDue, workoutImprovements } from '../stats.js';
 import { deepCopy, fmtClock, fmtDate, parseNum, uid } from '../util.js';
 import { today, startKey, go } from '../context.js';
 import { startRest, cancelRest, primeAudio, stopwatch } from '../timer.js';
@@ -27,10 +30,18 @@ function buildExercise(item, week, workouts) {
     max: item.max,
     unit: ex.unit,
     side: ex.side ?? null,
+    pair: item.pair ?? null,
+    prep: !!item.prep,
     variant,
     resistance,
     sets: Array.from({ length: n }, () => ({ reps: null, rir: null, done: false })),
   };
+}
+
+/** Hareketi o günlük alternatifle değiştirir (set sayısı, hedef aralık ve süperset yeri korunur). */
+function swapExercise(e, newId, workouts) {
+  const fresh = buildExercise({ ex: newId, sets: e.sets.length, min: e.min, max: e.max, pair: e.pair, prep: e.prep }, 2, workouts);
+  Object.assign(e, { ...fresh, plannedSets: e.plannedSets, sets: e.sets.map(() => ({ reps: null, rir: null, done: false })), swappedFrom: e.swappedFrom ?? e.exerciseId });
 }
 
 async function confirmReplaceDraft() {
@@ -115,8 +126,8 @@ export const EFFORTS = [
   { value: 'hard', label: 'Çok zor' },
 ];
 
-/** Bitirme sayfası: kısa geri bildirim (zorluk + ağrı). Kaydet → { effort, pain }, vazgeç → null. */
-function finishSheet({ done, total, editing, cooldownDone, effort, pain }) {
+/** Bitirme sayfası: ilerleme özeti + kısa geri bildirim (zorluk + ağrı). Kaydet → { effort, pain }, vazgeç → null. */
+function finishSheet({ done, total, editing, cooldownDone, effort, pain, improvements = [] }) {
   return new Promise((resolve) => {
     let settled = false;
     let sheet = null;
@@ -135,6 +146,11 @@ function finishSheet({ done, total, editing, cooldownDone, effort, pain }) {
       title: editing ? 'Değişiklikleri kaydet' : 'Antrenmanı bitir',
       content: h('div', { class: 'form' },
         h('p', { text: summary }),
+        improvements.length
+          ? h('div', { class: 'wins' },
+            h('strong', { text: `🏆 Geçen sefere göre ilerleme (${improvements.length})` }),
+            h('ul', null, improvements.map((x) => h('li', { text: x.text }))))
+          : null,
         h('div', { class: 'field' }, h('label', { text: 'Nasıldı?' }), eff,
           h('div', { class: 'hint', text: 'İki antrenman üst üste "çok zor" gelirse uygulama yükü hafifletmeni önerir.' })),
         h('div', { class: 'field' }, h('label', { text: 'Bir yerin ağrıdı mı? (kas yorgunluğu değil, eklem/keskin ağrı)' }), painChips)),
@@ -158,6 +174,7 @@ export function renderActive(root) {
     saveTimer = setTimeout(() => { if (state.draft === d) setKV('draft', d, { silent: true }); }, 250);
   };
   const allDone = () => d.exercises.every((e) => e.sets.every((s) => s.done));
+  const cardOf = new Map(); // hareket → kart (otomatik kaydırma için)
 
   const elapsed = h('span', { class: 'badge' });
   const tickElapsed = () => { elapsed.textContent = d.editingId ? 'Düzenleme' : `⏱ ${fmtClock((Date.now() - d.startedAt) / 1000)}`; };
@@ -205,8 +222,14 @@ export function renderActive(root) {
         if (!st.done) {
           if (st.reps == null) { st.reps = ph; input.value = String(ph); }
           st.done = true;
-          if (!allDone()) startRest(state.settings.restSec ?? 75, { sound: state.settings.sound !== false });
-          else cancelRest();
+          if (!allDone()) {
+            const idx = d.exercises.indexOf(e);
+            const r = restAfterSet(d.exercises, idx, state.settings.restSec ?? 75);
+            startRest(r.seconds, { sound: state.settings.sound !== false, label: r.label, done: r.done });
+            // Süpersette eş harekete / sıradaki harekete kendiliğinden geç (kaydırma derdi olmasın).
+            const target = r.nextIdx >= 0 && r.nextIdx !== idx ? cardOf.get(d.exercises[r.nextIdx]) : null;
+            if (target) setTimeout(() => target.scrollIntoView({ behavior: 'smooth', block: 'start' }), 350);
+          } else cancelRest();
         } else {
           st.done = false;
         }
@@ -219,10 +242,42 @@ export function renderActive(root) {
     return row;
   }
 
+  function openSwap(e) {
+    if (e.sets.some((s) => s.done)) {
+      toast('Bu harekette set işaretledin; değiştirmek için önce işaretleri kaldır.');
+      return;
+    }
+    const alts = alternativesFor(e.exerciseId, d.phase);
+    if (!alts.length) {
+      toast('Bu dönemde bu hareketin yerine geçecek bir seçenek yok.');
+      return;
+    }
+    let sheet = null;
+    sheet = openSheet({
+      title: `${e.name} yerine`,
+      content: h('div', { class: 'form' },
+        h('p', { class: 'muted small', text: 'Ağrı, eksik ekipman ya da yer sorunu varsa yalnızca bugün için değiştir. Programın kendisi değişmez.' }),
+        h('div', { class: 'swap-list' }, alts.map((id) => h('button', {
+          type: 'button', class: 'btn block swap-opt',
+          onClick: () => {
+            swapExercise(e, id, others);
+            persist();
+            sheet.close();
+            renderList();
+            cardOf.get(e)?.scrollIntoView({ block: 'start' });
+            toast(`Bugün: ${EX[id].name}`);
+          },
+        }, h('strong', { text: EX[id].name }), h('span', { class: 'muted small', text: ` · ${EX[id].muscle}` }))))),
+      actions: [h('button', { type: 'button', class: 'btn', text: 'Vazgeç', onClick: () => sheet.close() })],
+    });
+  }
+
   function exerciseCard(e) {
     const ex = EX[e.exerciseId] ?? { name: e.name, how: [], unit: e.unit, resist: 'none' };
     const last = lastPerformance(others, e.exerciseId);
     const due = e.min !== e.max ? progressionDue(others, e.exerciseId) : null;
+    const label = pairLabels(d.exercises)[d.exercises.indexOf(e)];
+    const video = videoUrl(e.exerciseId);
     const setsWrap = h('div', { class: 'sets' });
     const renderSets = () => {
       setsWrap.replaceChildren(
@@ -234,23 +289,50 @@ export function renderActive(root) {
         ...e.sets.map((st, si) => setRow(e, ex, st, si, last)));
     };
     renderSets();
-    return h('section', { class: 'card ex-card' },
+    const swapBtn = h('button', { type: 'button', class: 'btn small ghost', text: '↔ Değiştir', 'aria-label': `${ex.name} hareketini bugün için değiştir` });
+    const cardEl = h('section', { class: `card ex-card${label ? ' paired' : ''}` },
       h('div', { class: 'ex-head' },
-        h('div', null, h('h3', { text: ex.name }), h('div', { class: 'muted small', text: ex.muscle ?? '' })),
+        h('div', null,
+          h('h3', null, label ? h('span', { class: 'pair-tag', text: label }) : null, ex.name),
+          h('div', { class: 'muted small', text: `${ex.muscle ?? ''}${e.swappedFrom ? ` · bugün ${EX[e.swappedFrom]?.name ?? ''} yerine` : ''}` })),
         h('span', { class: 'badge', text: targetText({ ex: e.exerciseId, min: e.min, max: e.max }, e.plannedSets) })),
       due ? h('div', { class: 'tag up', text: `↑ Zorlaştırma zamanı: ${progressionHint(e.exerciseId, due)}` }) : null,
       h('details', { class: 'how' },
         h('summary', { text: 'Nasıl yapılır?' }),
         h('ul', null, (ex.how ?? []).map((t) => h('li', { text: t }))),
         ex.easier ? h('p', { class: 'small', text: `Kolaylaştır: ${ex.easier}` }) : null,
-        ex.harder ? h('p', { class: 'small', text: `Zorlaştır: ${ex.harder}` }) : null),
+        ex.harder ? h('p', { class: 'small', text: `Zorlaştır: ${ex.harder}` }) : null,
+        video ? h('a', { class: 'video-link small', href: video, target: '_blank', rel: 'noopener noreferrer', text: '▶ Videoda izle (YouTube araması)' }) : null),
       loadControl(ex, e, persist),
       h('div', { class: 'muted small last', text: lastText(ex, last) }),
       setsWrap,
       h('div', { class: 'set-tools' },
         btn('+ Set', () => { e.sets.push({ reps: null, rir: null, done: false }); renderSets(); persist(); }, 'small ghost'),
-        btn('− Set', () => { if (e.sets.length > 1) { e.sets.pop(); renderSets(); persist(); } }, 'small ghost')));
+        btn('− Set', () => { if (e.sets.length > 1) { e.sets.pop(); renderSets(); persist(); } }, 'small ghost'),
+        d.editingId ? null : swapBtn));
+    swapBtn.addEventListener('click', () => openSwap(e));
+    cardOf.set(e, cardEl);
+    return cardEl;
   }
+
+  /** Süperset başlığı: çiftin ilk kartından önce kısa açıklama. */
+  function exerciseList() {
+    const labels = pairLabels(d.exercises);
+    const out = [];
+    d.exercises.forEach((e, i) => {
+      if (labels[i]?.endsWith('a')) {
+        const b = d.exercises[i + 1];
+        out.push(h('p', { class: 'pair-note small' },
+          h('strong', { text: `🔁 Süperset ${e.pair}: ` }),
+          `${e.name} → ${b.name}, sonra dinlen. Tur sayısı kadar tekrarla.`));
+      }
+      out.push(exerciseCard(e));
+    });
+    return out;
+  }
+  const listEl = h('div', { class: 'ex-stack' });
+  const renderList = () => listEl.replaceChildren(...exerciseList());
+  renderList();
 
   const warm = warmupFor(d.phase);
   if (!Array.isArray(d.warmup) || d.warmup.length !== warm.length) d.warmup = warm.map(() => false);
@@ -267,7 +349,9 @@ export function renderActive(root) {
   async function finish() {
     const done = d.exercises.reduce((n, e) => n + e.sets.filter((s) => s.done).length, 0);
     const total = d.exercises.reduce((n, e) => n + e.sets.length, 0);
-    const res = await finishSheet({ done, total, editing: !!d.editingId, cooldownDone: !!d.cooldownDone, effort: d.effort ?? null, pain: d.pain ?? [] });
+    const prev = state.workouts.filter((w) => w.id !== d.editingId && w.date <= d.date);
+    const improvements = workoutImprovements({ ...d, id: d.editingId ?? d.id }, prev);
+    const res = await finishSheet({ done, total, editing: !!d.editingId, cooldownDone: !!d.cooldownDone, effort: d.effort ?? null, pain: d.pain ?? [], improvements });
     if (!res) return;
     d.effort = res.effort;
     d.pain = res.pain;
@@ -275,6 +359,7 @@ export function renderActive(root) {
     const rec = deepCopy(d);
     delete rec.editingId;
     rec.warmupDone = d.warmup.every(Boolean);
+    rec.improvements = improvements.map((x) => x.text);
     if (d.editingId) {
       rec.id = d.editingId;
     } else {
@@ -284,7 +369,8 @@ export function renderActive(root) {
     clearTimeout(saveTimer);
     await setKV('draft', null, { silent: true });
     await saveRecord('workouts', rec);
-    toast(d.editingId ? 'Antrenman güncellendi ✓' : 'Antrenman kaydedildi 💪');
+    toast(d.editingId ? 'Antrenman güncellendi ✓'
+      : improvements.length ? `Antrenman kaydedildi 💪 · ${improvements.length} harekette ilerleme 🏆` : 'Antrenman kaydedildi 💪');
     go(d.editingId ? '/gecmis' : '/bugun');
   }
 
@@ -311,7 +397,7 @@ export function renderActive(root) {
         h('summary', { text: 'Isınma (5 dk)' }),
         h('p', { class: 'muted small', text: 'Yürüyüşten hemen sonra başlıyorsan ilk iki maddeyi atlayabilirsin.' }),
         h('div', { class: 'checks' }, warmChecks))),
-    d.exercises.map(exerciseCard),
+    listEl,
     h('section', { class: 'card' },
       h('h3', { text: 'Soğuma' }),
       cool,
@@ -324,11 +410,24 @@ export function renderActive(root) {
       btn(d.editingId ? 'Değişiklikleri kaydet' : 'Antrenmanı bitir', finish, 'primary')),
   ]);
 
+  // Antrenman boyunca ekran kararmasın (iOS 18.4+ ana ekran uygulamasında da çalışır; desteklenmezse sessizce geçer).
+  let wakeLock = null;
+  const lockScreen = async () => {
+    if (d.editingId || !('wakeLock' in navigator) || document.visibilityState !== 'visible') return;
+    try { wakeLock = await navigator.wakeLock.request('screen'); } catch { wakeLock = null; }
+  };
+  const onVisible = () => { if (document.visibilityState === 'visible') lockScreen(); };
+  lockScreen();
+  document.addEventListener('visibilitychange', onVisible);
+
   return {
     sticky: true,
     unmount() {
       clearInterval(iv);
       clearTimeout(saveTimer);
+      document.removeEventListener('visibilitychange', onVisible);
+      wakeLock?.release?.().catch(() => {});
+      wakeLock = null;
       if (state.draft === d) setKV('draft', d, { silent: true });
     },
   };

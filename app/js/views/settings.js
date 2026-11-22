@@ -120,7 +120,7 @@ export function renderSettings(root) {
       field('Ekipmanım', equip, 'Yapay zekâ program önerirken bunun dışına çıkmaz. Boş bırakabilirsin.'),
       h('h3', { text: 'Haftalık takvim' }),
       schedule,
-      h('div', { class: 'grid2' }, field('Set arası dinlenme', rest), h('div', { class: 'field end' }, sound))),
+      h('div', { class: 'grid2' }, field('Set arası dinlenme', rest, 'Süperset turlarında 30 sn kısa (en az 45 sn)'), h('div', { class: 'field end' }, sound))),
     habitsCard(),
     syncCard(),
     pushCard(),

@@ -1,2 +1,2 @@
 // Uygulama sürümü. Değiştirince sw.js içindeki VERSION da aynı olmalı (testler kontrol eder).
-export const APP_VERSION = '0.7.1';
+export const APP_VERSION = '0.8.0';

@@ -152,6 +152,42 @@ export function isImprovement(exId, first, last) {
   return last.total > first.total || last.best > first.best;
 }
 
+const fmtKg = (v) => String(Math.round(v * 10) / 10).replace('.', ',');
+
+/** "Şınav: Diz → Tam" / "Goblet squat: 8 → 10 kg" / "Plank: en iyi set 40 → 55 sn" */
+export function improvementText(exId, a, b) {
+  const ex = EX[exId];
+  const name = ex?.name ?? exId;
+  if (ex?.variants && a.variant && b.variant && a.variant !== b.variant) return `${name}: ${a.variant} → ${b.variant}`;
+  const ka = a.resistance?.kind === 'dumbbell' ? a.resistance.kg : null;
+  const kb = b.resistance?.kind === 'dumbbell' ? b.resistance.kg : null;
+  if (ka != null && kb != null && kb > ka) return `${name}: ${fmtKg(ka)} → ${fmtKg(kb)} kg`;
+  const la = a.resistance?.level;
+  const lb = b.resistance?.level;
+  if (la != null && lb != null && lb > la) return `${name}: daha güçlü bant`;
+  const unit = ex?.unit === 'sec' ? ' sn' : ex?.unit === 'steps' ? ' adım' : ' tekrar';
+  if (b.best > a.best) return `${name}: en iyi set ${a.best} → ${b.best}${unit}`;
+  return `${name}: toplam ${a.total} → ${b.total}${unit}`;
+}
+
+/**
+ * Bu antrenmanda geçen sefere göre ilerleyen hareketler (geri bildirim: "yeni rekor").
+ * workout: kayıt ya da taslak; previous: önceki antrenmanlar. Sabit sayılı (min = max) hareketler sayılmaz.
+ */
+export function workoutImprovements(workout, previous) {
+  const out = [];
+  const seen = new Set();
+  for (const e of workout.exercises ?? []) {
+    if (seen.has(e.exerciseId) || e.min === e.max) continue;
+    seen.add(e.exerciseId);
+    const cur = exerciseHistory([workout], e.exerciseId)[0];
+    const last = cur ? lastPerformance(previous.filter((w) => w.id !== workout.id), e.exerciseId) : null;
+    if (!cur || !last || !isImprovement(e.exerciseId, last, cur)) continue;
+    out.push({ exId: e.exerciseId, text: improvementText(e.exerciseId, last, cur) });
+  }
+  return out;
+}
+
 /** 4 haftalık blok özeti (blockNo 1'den başlar). */
 export function blockSummary({ workouts, padel, daily, measurements }, startKey, blockNo) {
   const from = addDays(startKey, (blockNo - 1) * 28);

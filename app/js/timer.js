@@ -6,6 +6,8 @@ let audioCtx = null;
 let endAt = 0;
 let tick = null;
 let soundOn = true;
+let label = 'Dinlenme';
+let doneText = 'Dinlenme bitti — sıradaki set!';
 
 /** Ses yalnızca kullanıcı dokunuşuyla açılabilir (iOS); bu yüzden set onayında çağrılır. */
 export function primeAudio() {
@@ -47,21 +49,24 @@ function render() {
   if (left <= 0) {
     stop();
     beep();
-    el.replaceChildren(h('div', { class: 'rest-inner done' }, h('strong', { text: 'Dinlenme bitti — sıradaki set!' })));
+    el.replaceChildren(h('div', { class: 'rest-inner done' }, h('strong', { text: doneText })));
     el.hidden = false;
     setTimeout(() => { if (!tick) el.hidden = true; }, 3500);
     return;
   }
   el.hidden = false;
   el.replaceChildren(h('div', { class: 'rest-inner' },
-    h('span', { class: 'muted', text: 'Dinlenme' }),
+    h('span', { class: 'muted rest-label', text: label }),
     h('strong', { class: 'rest-time', text: fmtClock(left) }),
     h('button', { type: 'button', class: 'btn small', text: '+15 sn', onClick: () => { endAt += 15000; render(); } }),
     h('button', { type: 'button', class: 'btn small', text: 'Geç', onClick: () => { stop(); el.hidden = true; } })));
 }
 
-export function startRest(seconds, { sound = true } = {}) {
+/** label: sayaçta görünen başlık (ör. "Geçiş → Şınav"); done: süre bitince gösterilen metin. */
+export function startRest(seconds, { sound = true, label: lbl = 'Dinlenme', done = 'Dinlenme bitti — sıradaki set!' } = {}) {
   soundOn = sound;
+  label = lbl;
+  doneText = done;
   endAt = Date.now() + seconds * 1000;
   if (tick) clearInterval(tick);
   tick = setInterval(render, 250);

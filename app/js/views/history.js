@@ -24,7 +24,7 @@ function openWorkoutDetail(w) {
     const load = [e.variant, resistanceText(e.resistance)].filter(Boolean).join(', ');
     const rir = sets.some((s) => s.rir != null) ? ` (RIR ${sets.map((s) => (s.rir ?? '–')).join(', ')})` : '';
     return h('li', { class: sets.length ? '' : 'muted' },
-      h('strong', { text: ex?.name ?? e.name ?? e.exerciseId }),
+      h('strong', { text: `${ex?.name ?? e.name ?? e.exerciseId}${e.swappedFrom ? ` (${EX[e.swappedFrom]?.name ?? e.swappedFrom} yerine)` : ''}` }),
       h('div', { class: 'small', text: sets.length ? `${sets.map((s) => s.reps).join(' · ')}${unitSuffix(e.unit)}${rir}${load ? ` — ${load}` : ''}` : 'yapılmadı' }));
   });
   let sheet;
@@ -32,6 +32,9 @@ function openWorkoutDetail(w) {
     title: `Gün ${w.day} · ${fmtDate(w.date, { day: 'numeric', month: 'long' })}`,
     content: h('div', null,
       h('p', { class: 'muted', text: `${PHASES[w.phase]?.label ?? ''} · ${w.durationMin ? `${w.durationMin} dk · ` : ''}${doneSets(w)} set${w.warmupDone ? ' · ısınma ✓' : ''}${w.cooldownDone ? ' · soğuma ✓' : ''}` }),
+      (w.improvements ?? []).length
+        ? h('div', { class: 'wins' }, h('strong', { text: '🏆 Geçen sefere göre ilerleme' }), h('ul', null, w.improvements.map((t) => h('li', { text: t }))))
+        : null,
       h('ul', { class: 'detail-list' }, rows),
       w.note ? h('p', { class: 'pre', text: `Not: ${w.note}` }) : null),
     actions: [

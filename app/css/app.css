@@ -671,3 +671,16 @@ th { color: var(--text-2); font-weight: 600; font-size: 13px; }
 .push-list { display: grid; gap: 8px; margin: 8px 0 12px; }
 .push-row { display: grid; grid-template-columns: 1fr auto; gap: 10px; align-items: center; }
 .time-input { width: 108px; min-height: 40px; }
+
+/* 0.8: süperset, ilerleme özeti, değiştir, video */
+.pair-tag { display: inline-block; min-width: 26px; margin-right: 6px; padding: 1px 6px; border-radius: 8px; background: var(--accent-weak); color: var(--accent); font-size: 13px; font-weight: 700; text-align: center; vertical-align: 2px; }
+.pair-note { margin: 14px 4px 6px; color: var(--text-2); }
+.ex-card.paired { border-left: 3px solid var(--accent); }
+.wins { padding: 10px 12px; border-radius: 12px; background: var(--accent-weak); }
+.wins ul { margin: 6px 0 0; padding-left: 18px; }
+.video-link { display: inline-block; margin-top: 6px; color: var(--accent); }
+.swap-list { display: grid; gap: 8px; }
+.swap-opt { text-align: left; justify-content: flex-start; }
+.ex-row .pair-tag { font-size: 12px; }
+.day-meta { margin: -4px 0 10px; }
+.ex-card { scroll-margin-top: 12px; }

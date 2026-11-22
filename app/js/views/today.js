@@ -2,7 +2,10 @@
 // Sabah tartı + uyku → öğle öğünü → akşam yürüyüşü → antrenman/padel → akşam yemeği, ara öğün → gün sonu (adım + not).
 import { state, saveDaily, dismissAlert } from '../store.js';
 import { h, btn, numInput, toast } from '../ui.js';
-import { WEEKLY_STRENGTH_MIN, WEEKLY_STRENGTH_TARGET, blockOf, dayPlanFor, nextStrengthDay, programWeek } from '../program.js';
+import {
+  EX, WEEKLY_STRENGTH_MIN, WEEKLY_STRENGTH_TARGET, blockOf, dayPlanFor, nextStrengthDay, programWeek,
+  programFor, pairLabels, estimateMinutes, shortItems,
+} from '../program.js';
 import { HABIT_DAYS, activeDays, isStrength, isTest, trendRate, trendWeight, weekSummary, weeklyStreak } from '../stats.js';
 import { maintenanceWeek } from '../targets.js';
 import { planFor } from '../ifthen.js';
@@ -127,6 +130,24 @@ function strengthRemainingThisWeek(t) {
   return n;
 }
 
+/** Sıradaki günün tahmini süresi ve hareketleri (süperset çiftleri "+" ile). */
+function workoutPreview(day, t) {
+  const items = programFor(state.settings)[day] ?? [];
+  if (!items.length) return null;
+  const week = Math.max(1, programWeek(startKey(), t));
+  const restSec = state.settings.restSec ?? 75;
+  const main = items.filter((i) => !i.prep);
+  const labels = pairLabels(main);
+  const groups = [];
+  for (let i = 0; i < main.length; i++) {
+    const name = (x) => EX[x.ex]?.name ?? x.ex;
+    if (labels[i]?.endsWith('a')) { groups.push(`${name(main[i])} + ${name(main[i + 1])}`); i++; } else groups.push(name(main[i]));
+  }
+  return h('details', { class: 'flow-more' },
+    h('summary', { class: 'muted small', text: `~${estimateMinutes(items, week, restSec)} dk · ${main.length} hareket (kısa: ~${estimateMinutes(shortItems(items), week, restSec)} dk)` }),
+    h('ul', { class: 'small' }, groups.map((g) => h('li', { text: g }))));
+}
+
 function workoutRow(t, r, plan) {
   const done = state.workouts.filter((w) => w.date === t && isStrength(w));
   const next = nextStrengthDay(state.workouts);
@@ -135,8 +156,10 @@ function workoutRow(t, r, plan) {
   const tag = plan.override ? ' (gün sonu kontrolünde değişti)' : '';
   if (done.length) {
     const w = done[done.length - 1];
+    const wins = w.improvements ?? [];
     return row({ icon: '💪', title: `Antrenman · Gün ${w.day}${w.short ? ' (kısa)' : ''}`, done: true },
-      h('p', { class: 'flow-text', text: `Kaydedildi${w.durationMin ? ` — ${w.durationMin} dk` : ''}` }));
+      h('p', { class: 'flow-text', text: `Kaydedildi${w.durationMin ? ` — ${w.durationMin} dk` : ''}${wins.length ? ` · 🏆 ${wins.length} harekette ilerleme` : ''}` }),
+      wins.length ? h('p', { class: 'muted small', text: wins.slice(0, 3).join(' · ') }) : null);
   }
   if (state.draft) {
     return row({ icon: '💪', title: `Antrenman · Gün ${state.draft.day}` },
@@ -160,6 +183,7 @@ function workoutRow(t, r, plan) {
         btn('Kısa (20 dk)', () => startWorkout(next, { short: true }), 'small ghost')));
   }
   return row({ icon: '💪', title: `${title}${tag}`, time: 'yürüyüşten sonra' },
+    workoutPreview(next, t),
     h('div', { class: 'flow-actions' },
       btn('Başla', () => startWorkout(next), 'small primary'),
       btn('Kısa (20 dk)', () => startWorkout(next, { short: true }), 'small'),

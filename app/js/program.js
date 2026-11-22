@@ -1,5 +1,5 @@
 // Program: dönemler (ekipmansız / bant / dambıl), A-B günleri, haftalık takvim ve hedef kuralları.
-import { EX } from './exercises.js';
+import { EX, ALTERNATIVES } from './exercises.js';
 import { daysBetween, fmtNum } from './util.js';
 
 export { EX };
@@ -17,28 +17,138 @@ export const BAND_LEVELS = ['Çok hafif', 'Hafif', 'Orta', 'Ağır', 'Çok ağı
 
 const it = (ex, sets, min, max = min, extra = {}) => ({ ex, sets, min, max, ...extra });
 const PREP = { prep: true };
+/** Süperset çifti: aynı numaralı iki hareket sırayla yapılır, sonra dinlenilir (birbirine rakip olmayan kaslar). */
+const P = (pair) => ({ pair });
 
+// Haftalık set (3 seans, A/B dönüşümlü ≈ her gün 1,5×): göğüs, sırt, bacak, kalça ~9; omuz ön/yan/arka ayrı ayrı.
+// Kaynaklar: Iversen 2021 (zaman verimli antrenman: süperset, kas başına haftada ≥4 set, 6–15 tekrar),
+// Zhang/Weakley 2025 meta-analizi (süperset: benzer hacim, daha kısa seans; aynı kası çalıştıran çiftlerden kaçın).
+// Padel hazırlığı (yana lunge, hafif squat jump) ısınmanın içinde; bilek ekstansiyonu dirsek koruması için ayrı hareket.
 export const PROGRAMS = {
   bodyweight: {
-    A: [it('squat', 3, 12, 15), it('pushup', 3, 8, 12), it('glute_bridge', 3, 12, 15), it('chair_dips', 3, 8, 12), it('plank', 3, 20, 45)],
-    B: [it('reverse_lunge', 3, 8, 12), it('wide_pushup', 3, 8, 12), it('single_leg_bridge', 3, 8, 12), it('superman', 3, 10, 12),
-      it('side_plank', 3, 15, 30), it('lateral_lunge', 2, 8, 8, PREP), it('squat_jump', 2, 8, 8, PREP)],
+    A: [it('squat', 3, 12, 15, P(1)), it('pushup', 3, 8, 12, P(1)), it('inverted_row', 3, 8, 12, P(2)), it('glute_bridge', 3, 12, 15, P(2)),
+      it('plank', 3, 20, 45)],
+    B: [it('reverse_lunge', 3, 8, 12, P(1)), it('wide_pushup', 3, 8, 12, P(1)), it('inverted_row', 3, 8, 12, P(2)), it('single_leg_bridge', 3, 8, 12, P(2)),
+      it('side_plank', 2, 15, 30)],
   },
   band: {
-    A: [it('band_squat', 3, 12, 15), it('pushup', 3, 8, 12), it('band_row', 3, 12, 15), it('band_glute_bridge', 3, 12, 15),
-      it('plank', 3, 20, 45), it('band_lateral_raise', 2, 15, 20)],
-    B: [it('reverse_lunge', 3, 8, 12), it('band_shoulder_press', 3, 10, 12), it('band_pulldown', 3, 12, 15), it('monster_walk', 3, 10),
-      it('side_plank', 3, 15, 30), it('band_face_pull', 2, 15), it('lateral_lunge', 2, 8, 8, PREP), it('squat_jump', 2, 8, 8, PREP),
-      it('band_wrist_ext', 2, 15, 15, PREP)],
+    A: [it('band_squat', 3, 12, 15, P(1)), it('pushup', 3, 8, 12, P(1)), it('band_row', 3, 12, 15, P(2)), it('band_glute_bridge', 3, 12, 15, P(2)),
+      it('plank', 3, 20, 45, P(3)), it('band_lateral_raise', 2, 15, 20, P(3))],
+    B: [it('reverse_lunge', 3, 8, 12, P(1)), it('band_shoulder_press', 3, 10, 12, P(1)), it('band_pulldown', 3, 12, 15, P(2)), it('monster_walk', 3, 10, 10, P(2)),
+      it('side_plank', 2, 15, 30, P(3)), it('band_face_pull', 2, 15, 15, P(3)), it('band_wrist_ext', 2, 15, 15)],
   },
   dumbbell: {
-    A: [it('goblet_squat', 3, 8, 12), it('pushup', 3, 8, 12), it('db_row', 3, 8, 12), it('db_rdl', 3, 8, 12),
-      it('plank', 3, 30, 60), it('db_lateral_raise', 2, 12, 15)],
-    B: [it('db_reverse_lunge', 3, 8, 12), it('db_shoulder_press', 3, 8, 12), it('pullup', 3, 5, 10), it('db_glute_bridge', 3, 10, 15),
-      it('side_plank', 3, 20, 40), it('db_rear_delt_fly', 2, 12, 15), it('lateral_lunge', 2, 8, 8, PREP), it('squat_jump', 2, 8, 8, PREP),
-      it('db_wrist_ext', 2, 15, 15, PREP)],
+    A: [it('goblet_squat', 3, 8, 12, P(1)), it('db_row', 3, 8, 12, P(1)), it('db_rdl', 3, 8, 12, P(2)), it('pushup', 3, 8, 12, P(2)),
+      it('db_lateral_raise', 2, 12, 15, P(3)), it('plank', 3, 30, 60, P(3))],
+    B: [it('db_reverse_lunge', 3, 8, 12, P(1)), it('db_shoulder_press', 3, 8, 12, P(1)), it('db_glute_bridge', 3, 10, 15, P(2)), it('pullup', 3, 5, 10, P(2)),
+      it('pushup', 3, 8, 12, P(3)), it('db_rear_delt_fly', 2, 12, 15, P(3)), it('side_plank', 2, 20, 40, P(4)), it('db_wrist_ext', 2, 15, 15, P(4))],
   },
 };
+
+/** Dönemde bulunmayan ekipman türleri (dambıl dönemi bant gerektirmez; ekipmansızda ikisi de yok). */
+const MISSING_GEAR = { bodyweight: ['band', 'miniband', 'dumbbell'], dumbbell: ['band', 'miniband'] };
+export function isAvailable(exId, phase) {
+  const ex = EX[exId];
+  return !!ex && !(MISSING_GEAR[phase] ?? []).includes(ex.resist);
+}
+
+/** O gün için değişim seçenekleri (ağrı / eksik ekipman): dönemde yapılabilenler. */
+export function alternativesFor(exId, phase) {
+  return (ALTERNATIVES[exId] ?? []).filter((id) => id !== exId && isAvailable(id, phase));
+}
+
+/**
+ * Süperset çiftlerini doğrular: yalnızca yan yana, hazırlık olmayan TAM İKİ hareket çift sayılır; numaralar 1'den
+ * yeniden verilir. Yapay zekâdan gelen programlar için.
+ */
+export function normalizePairs(items) {
+  const out = items.map(({ pair, ...rest }) => rest);
+  let n = 0;
+  for (let i = 0; i < items.length - 1; i++) {
+    const a = items[i];
+    const b = items[i + 1];
+    if (a.pair == null || a.prep || b.prep || b.pair !== a.pair || items[i + 2]?.pair === a.pair || items[i - 1]?.pair === a.pair) continue;
+    n++;
+    out[i].pair = n;
+    out[i + 1].pair = n;
+    i++;
+  }
+  return out;
+}
+
+/** Süperset etiketleri: dizideki her hareket için '1a' / '1b' ya da null. */
+export function pairLabels(list) {
+  return list.map((e, i) => {
+    if (e.pair == null) return null;
+    if (list[i + 1]?.pair === e.pair) return `${e.pair}a`;
+    if (list[i - 1]?.pair === e.pair) return `${e.pair}b`;
+    return null;
+  });
+}
+
+/** Süperset turu sonrası dinlenme: her kas yine ~2 dk dinlenir (eş hareketin seti + geçiş + bu süre). */
+export const PAIR_TRANSITION_SEC = 20;
+export const PREP_REST_SEC = 30;
+export const pairRestSec = (restSec = 75) => Math.max(45, restSec - 30);
+
+/**
+ * Set bitince ne kadar dinlenilecek (aktif antrenman listesi üzerinde): süperset eşinin bu turda seti varsa kısa
+ * geçiş, tur bitince kısaltılmış dinlenme, tek hareketlerde ayarlardaki süre.
+ */
+export function restAfterSet(exercises, idx, restSec = 75) {
+  const e = exercises[idx];
+  const doneOf = (x) => x.sets.filter((s) => s.done).length;
+  const open = (i) => !!exercises[i] && exercises[i].sets.some((s) => !s.done);
+  const labels = pairLabels(exercises);
+  const partnerIdx = labels[idx]?.endsWith('a') ? idx + 1 : labels[idx]?.endsWith('b') ? idx - 1 : -1;
+  const partner = partnerIdx >= 0 ? exercises[partnerIdx] : null;
+  // Sıradaki hareket (ekran oraya kaydırılır): önce bu grup, sonra ilk yarım kalan hareket.
+  const nextOpen = (from) => {
+    for (let k = 0; k < exercises.length; k++) {
+      const i = (from + k) % exercises.length;
+      if (open(i)) return i;
+    }
+    return -1;
+  };
+  if (partner && doneOf(partner) < doneOf(e) && doneOf(partner) < partner.sets.length) {
+    return { seconds: PAIR_TRANSITION_SEC, label: `Geçiş → ${partner.name}`, done: `Şimdi: ${partner.name}`, nextIdx: partnerIdx };
+  }
+  if (e.prep) return { seconds: PREP_REST_SEC, label: 'Dinlenme', done: 'Sıradaki set!', nextIdx: open(idx) ? idx : nextOpen(idx + 1) };
+  if (partner) {
+    const firstIdx = Math.min(idx, partnerIdx);
+    const nextIdx = open(firstIdx) ? firstIdx : open(firstIdx + 1) ? firstIdx + 1 : nextOpen(firstIdx + 2);
+    const nextName = exercises[nextIdx]?.name;
+    return { seconds: pairRestSec(restSec), label: 'Tur bitti — dinlenme', done: nextName ? `Sıradaki: ${nextName}` : 'Sıradaki set!', nextIdx };
+  }
+  const nextIdx = open(idx) ? idx : nextOpen(idx + 1);
+  return { seconds: restSec, label: 'Dinlenme', done: nextIdx === idx || nextIdx < 0 ? 'Dinlenme bitti — sıradaki set!' : `Sıradaki: ${exercises[nextIdx].name}`, nextIdx };
+}
+
+function workSec(item) {
+  const ex = EX[item.ex];
+  const per = ex?.unit === 'sec' ? item.max : (ex?.unit === 'steps' ? item.max * 2 : item.max * 3);
+  return (per + 10) * (ex?.side ? 2 : 1);
+}
+
+/** Tahmini süre (dk, 5'e yuvarlı): ısınma + soğuma + setler + dinlenmeler. */
+export function estimateMinutes(items, week = 2, restSec = 75) {
+  let sec = 7 * 60;
+  const main = items.filter((i) => !i.prep);
+  const labels = pairLabels(main);
+  for (let i = 0; i < main.length; i++) {
+    const a = main[i];
+    if (labels[i]?.endsWith('a')) {
+      const b = main[i + 1];
+      const rounds = Math.max(plannedSets(a, week), plannedSets(b, week));
+      sec += rounds * (workSec(a) + workSec(b) + PAIR_TRANSITION_SEC + pairRestSec(restSec));
+      i++;
+    } else {
+      sec += plannedSets(a, week) * (workSec(a) + restSec);
+    }
+  }
+  for (const p of items.filter((i) => i.prep)) sec += plannedSets(p, week) * (workSec(p) + PREP_REST_SEC);
+  return Math.max(10, Math.round(sec / 300) * 5);
+}
 
 /** Etkin program: yapay zekâdan aktarılmış özel program o dönem için varsa onu, yoksa varsayılanı döndürür. */
 export function programFor(settings) {
@@ -49,7 +159,13 @@ export function programFor(settings) {
 }
 
 export function warmupFor(phase) {
-  const list = ['Yerinde yürüyüş veya hafif tempo — 1 dk', 'Kol çevirme — 30 sn', 'Kalça çevirme — 30 sn', 'Yarım squat — 10 tekrar'];
+  const list = [
+    'Yerinde yürüyüş veya hafif tempo — 1 dk',
+    'Kol ve kalça çevirme — 30 sn',
+    'Yarım squat — 10 tekrar',
+    'Yana lunge — her taraf 6 (padel hazırlığı)',
+    'Hafif squat jump — 6, yumuşak iniş (dizde rahatsızlık varsa atla)',
+  ];
   if (phase === 'band') list.push('Bant ile dış rotasyon — 2 × 12');
   else if (phase === 'dumbbell') list.push('Yan yatarak dambılla dış rotasyon (1–2 kg) — her kol 2 × 12');
   return list;

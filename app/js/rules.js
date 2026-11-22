@@ -303,7 +303,7 @@ function dumbbellTime({ workouts, settings, today }) {
     level: 'info',
     icon: '🏋️',
     title: 'Dambıl zamanı olabilir',
-    body: 'Bacak hareketlerinde ağır bantla üst sınırdasın. Planına göre ayarlanabilir dambıl (2,5 → 15–20 kg) alıp Ayarlar\'dan dönemi "Dambıl" yapabilirsin.',
+    body: 'Bacak hareketlerinde ağır bantla üst sınırdasın. 20 kg vidalı dambıl seti + kapı barfiks barı alıp Ayarlar\'dan dönemi "Dambıl" yapabilirsin (dambıl programı bant gerektirmez).',
     action: { label: 'Ayarlar', to: '/ayarlar' },
   };
 }

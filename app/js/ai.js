@@ -1,7 +1,7 @@
 // 3. aşama (kopyala-yapıştır modu): verilerden yapay zekâ için hazır mesaj üretir ve
 // yapay zekânın önerdiği programı okur. Ağ isteği yok; mesajı kullanıcı kendisi kopyalar.
 // Saf fonksiyonlar — testlerde de kullanılır.
-import { EX, PHASES, DAY_TYPES, programFor, programWeek, blockOf, targetText, plannedSets, resistanceText } from './program.js';
+import { EX, PHASES, DAY_TYPES, programFor, programWeek, blockOf, targetText, plannedSets, resistanceText, isAvailable, normalizePairs } from './program.js';
 import { weeklyAverages, weeklySessions, exerciseHistory, trackedItems, valuesInRange } from './stats.js';
 import { ageFromBirthYear, effectiveTargets, inMaintenance } from './targets.js';
 import { IFTHEN_TRIGGERS } from './ifthen.js';
@@ -235,6 +235,8 @@ function feedbackSection(state, today) {
   const fb = recent.filter((w) => w.effort || (w.pain ?? []).length)
     .map((w) => `${fmtDate(w.date)} Gün ${w.day}: ${[EFFORT_TR[w.effort], painText(w) ? `ağrı: ${painText(w)}` : null].filter(Boolean).join(', ')}`);
   lines.push(`- Antrenman sonrası his: ${fb.length ? fb.join('; ') : 'kayıt yok'}`);
+  const wins = recent.flatMap((w) => w.improvements ?? []);
+  if (wins.length) lines.push(`- Son 3 haftadaki ilerlemeler (geçen sefere göre): ${wins.slice(-8).join('; ')}`);
   const tests = testHistory(state.measurements);
   if (tests.length) {
     const last = tests[tests.length - 1];
@@ -262,10 +264,8 @@ function padelSection(state, today) {
 }
 
 /** Dönemde bulunmayan ekipmanı gerektiren hareketler (dambıl dönemi bant gerektirmez; ekipmansızda ikisi de yok). */
-const MISSING_GEAR = { bodyweight: ['band', 'miniband', 'dumbbell'], dumbbell: ['band', 'miniband'] };
 export function unavailableExercises(phase) {
-  const missing = MISSING_GEAR[phase] ?? [];
-  return Object.entries(EX).filter(([, e]) => missing.includes(e.resist)).map(([id]) => id);
+  return Object.keys(EX).filter((id) => !isAvailable(id, phase));
 }
 
 export function allowedExerciseList() {
@@ -291,7 +291,7 @@ export function buildPrompt(kind, { state, today, startKey, alerts = [], questio
       'Görev: Verilerime göre önümüzdeki 4 haftalık blok için Gün A ve Gün B programını öner. Önce kısa gerekçeni yaz.',
       'Sonra programı uygulamaya aktarabilmem için en sonda TEK bir ```json kod bloğu ver. Kurallar:',
       '- Yalnızca geçerli JSON: çift tırnak, yorum yok, sondaki virgül yok, "..." gibi kısaltma yok.',
-      '- Alanlar: "phase", "note", "A", "B". A ve B listelerindeki her öğe: "ex" (kimlik), "sets" (sayı), "min" (sayı), "max" (sayı), isteğe bağlı "prep": true.',
+      '- Alanlar: "phase", "note", "A", "B". A ve B listelerindeki her öğe: "ex" (kimlik), "sets" (sayı), "min" (sayı), "max" (sayı), isteğe bağlı "prep": true, isteğe bağlı "pair": süperset numarası (aynı numaralı TAM İKİ hareket yan yana; birbirine rakip olmayan kaslar, ör. bacak + itiş). Seans 35–40 dakikayı geçmesin.',
       `- "ex" yalnızca şu kimliklerden biri olabilir (adını değil kimliğini yaz): ${allowedExerciseList()}`,
       '- Her gün 4–9 hareket; sets 1–5; min ≤ max; süreli hareketlerde min/max saniyedir.',
       `- Şu anki dönem "${state.settings.phase}"; ekipmanım değişmediyse aynı dönemi kullan.`,
@@ -301,7 +301,7 @@ export function buildPrompt(kind, { state, today, startKey, alerts = [], questio
       })(),
       'Şu anki programım bu biçimde (örnek olarak kullan, değiştirerek ver):',
       '```json',
-      JSON.stringify({ phase: state.settings.phase, note: 'kısa açıklama', ...(() => { const p = programFor(state.settings); return { A: p.A.map(({ ex, sets, min, max, prep }) => ({ ex, sets, min, max, ...(prep ? { prep } : {}) })), B: p.B.map(({ ex, sets, min, max, prep }) => ({ ex, sets, min, max, ...(prep ? { prep } : {}) })) }; })() }),
+      JSON.stringify({ phase: state.settings.phase, note: 'kısa açıklama', ...(() => { const p = programFor(state.settings); return { A: p.A.map(({ ex, sets, min, max, prep, pair }) => ({ ex, sets, min, max, ...(prep ? { prep } : {}), ...(pair ? { pair } : {}) })), B: p.B.map(({ ex, sets, min, max, prep, pair }) => ({ ex, sets, min, max, ...(prep ? { prep } : {}), ...(pair ? { pair } : {}) })) }; })() }),
       '```',
     ].join('\n'),
     meals: (() => {
@@ -371,7 +371,7 @@ export function parseProgram(text) {
   const B = pickDay(obj, 'B');
   if (!A || !B) throw new Error('Programda Gün A ve Gün B listeleri bulunamadı ("A": [...], "B": [...]).');
   const note = obj.note ?? obj.not ?? obj['açıklama'] ?? '';
-  return { phase, note: typeof note === 'string' ? note.slice(0, 500) : '', A: parseDay(A, 'A'), B: parseDay(B, 'B') };
+  return { phase, note: typeof note === 'string' ? note.slice(0, 500) : '', A: normalizePairs(parseDay(A, 'A')), B: normalizePairs(parseDay(B, 'B')) };
 }
 
 function unwrap(obj) {
@@ -424,6 +424,7 @@ function parseDay(list, name) {
     const sets = Math.round(Number(it.sets ?? it.set));
     if (!Number.isFinite(sets) || sets < 1 || sets > 5) throw new Error(`Gün ${name}, ${EX[id].name}: set sayısı 1–5 olmalı.`);
     if (!Number.isFinite(lo) || !Number.isFinite(hi) || lo < 1 || hi > 120) throw new Error(`Gün ${name}, ${EX[id].name}: tekrar aralığı hatalı.`);
-    return { ex: id, sets, min: lo, max: hi, ...(it.prep ? { prep: true } : {}) };
+    const pair = Number(it.pair ?? it.superset ?? it.cift ?? it['çift']);
+    return { ex: id, sets, min: lo, max: hi, ...(it.prep ? { prep: true } : {}), ...(Number.isInteger(pair) && pair > 0 ? { pair } : {}) };
   });
 }

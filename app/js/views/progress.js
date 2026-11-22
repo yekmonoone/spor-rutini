@@ -204,6 +204,7 @@ function blockSection() {
       s.weightStart != null && s.weightEnd != null ? `Kilo: ${kg(s.weightStart)} → ${kg(s.weightEnd)} (${signed(s.weightEnd - s.weightStart, ' kg')})` : 'Kilo: karşılaştırma için ilk ve son haftada tartı gerekli',
       s.waistStart != null && s.waistEnd != null ? `Bel: ${fmtNum(s.waistStart)} → ${fmtNum(s.waistEnd)} cm (${signed(s.waistEnd - s.waistStart, ' cm')})` : 'Bel: en az 2 ölçüm gerekli',
       s.tracked ? `Hareketlerde ilerleme: ${s.improved}/${s.tracked}` : 'Hareket ilerlemesi: yeterli veri yok',
+      `🏆 Antrenman sonu ilerleme kaydı: ${state.workouts.filter((w) => w.date >= s.from && w.date <= s.to).reduce((n, w) => n + (w.improvements?.length ?? 0), 0)}`,
     ];
     const tests = testHistory(state.measurements);
     const before = tests.filter((x) => x.date < s.from).pop() ?? tests.find((x) => x.date <= addDays(s.from, 6));

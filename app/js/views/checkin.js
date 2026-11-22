@@ -26,6 +26,11 @@ export function busyWeekInfo(settings, nextWk) {
   return { strengthDays: days, last, on };
 }
 
+/** Aralıktaki antrenmanlarda kaydedilen ilerleme (rekor) sayısı. */
+function winsInRange(from, to) {
+  return state.workouts.filter((w) => w.date >= from && w.date <= to).reduce((n, w) => n + (w.improvements?.length ?? 0), 0);
+}
+
 function summaryCard(t, wk) {
   const end = addDays(wk, 6);
   const ref = end < t ? end : t;
@@ -45,7 +50,8 @@ function summaryCard(t, wk) {
       stat('Protein', s.protein == null ? '–' : `${fmtNum(s.protein, 0)} g`, p.proteinMin ? `hedef ${p.proteinMin}+` : null),
       stat('Uyku', s.sleep == null ? '–' : `${fmtNum(s.sleep)} sa`, 'hedef 7,5+'),
       stat('Adım', s.steps == null ? '–' : fmtNum(s.steps, 0), 'hedef 7.000+'),
-      stat('Seri', streak ? `🔥 ${streak} hafta` : '–', '2+ kuvvetli haftalar')));
+      stat('Seri', streak ? `🔥 ${streak} hafta` : '–', '2+ kuvvetli haftalar'),
+      stat('İlerleme', `🏆 ${winsInRange(wk, end)}`, 'geçen sefere göre')));
 }
 
 function waistCard(t, wk) {
