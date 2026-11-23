@@ -1,7 +1,7 @@
 // Ekranların ortak kullandığı türetilmiş değerler ve gezinme.
 import { state, setKV, updateMeta, updateSettings } from './store.js';
 import { addDays, dateKey, fmtNum } from './util.js';
-import { programStartKey } from './program.js';
+import { programStartKey, PHASES } from './program.js';
 import { evaluateAlerts } from './rules.js';
 import { calibrate, effectiveTargets, inMaintenance } from './targets.js';
 import { openDailyForm, openPadelForm, openMeasureForm, openTestForm, exportBackupFlow } from './forms.js';
@@ -74,5 +74,9 @@ export function runAction(to) {
   else if (to.startsWith('kcal:')) applyCalibration(Number(to.slice(5)));
   else if (to === 'maint:on') setMaintenance(true);
   else if (to === 'maint:off') setMaintenance(false);
+  else if (to.startsWith('phase:')) {
+    const phase = to.slice(6);
+    updateSettings({ phase }).then(() => toast(`Dönem: ${PHASES[phase]?.label ?? phase}`));
+  }
   else go(to);
 }

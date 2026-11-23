@@ -95,3 +95,13 @@ test('yapay zekâ: ekipman satırı ve dönemde olmayan hareketler', () => {
   assert.match(list, /db_rear_delt_fly/);
   assert.match(list, /db_wrist_ext/);
 });
+
+test('bant dönemi seçili ama bant kullanılmamışsa ekipmansıza geçiş önerilir', () => {
+  const band = { phase: 'band', schedule: SCHEDULE };
+  const a = evaluateAlerts(base({ settings: band })).find((x) => x.id === 'band-phase');
+  assert.ok(a);
+  assert.equal(a.action.to, 'phase:bodyweight');
+  const used = [{ id: 'w', date: '2026-11-17', day: 'A', exercises: [{ exerciseId: 'band_row', resistance: { kind: 'band', level: 2 }, sets: [{ reps: 12, done: true }] }] }];
+  assert.ok(!ids(evaluateAlerts(base({ settings: band, workouts: used }))).includes('band-phase'));
+  assert.ok(!ids(evaluateAlerts(base())).includes('band-phase'));
+});

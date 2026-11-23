@@ -1,6 +1,6 @@
 {
   "name": "spor-rutini",
-  "version": "0.9.0",
+  "version": "0.9.1",
   "private": true,
   "type": "module",
   "description": "Spor rutini takip uygulaması (PWA) — veriler cihazda, isteğe bağlı Supabase eşitleme.",

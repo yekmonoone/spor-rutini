@@ -291,6 +291,21 @@ function weightsReady({ workouts, settings, today, startKey }) {
   };
 }
 
+/** Bant dönemi seçili ama hiç bantlı antrenman yok: büyük ihtimalle bant alınmadı (karar: bant seti yok). */
+function bandPhaseCheck({ workouts, settings }) {
+  if (settings?.phase !== 'band') return null;
+  const usedBand = workouts.some((w) => (w.exercises ?? []).some((e) => ['band', 'miniband'].includes(e.resistance?.kind) && e.sets?.some((s) => s.done)));
+  if (usedBand) return null;
+  return {
+    id: 'band-phase',
+    level: 'warn',
+    icon: '🔁',
+    title: 'Dönem "Bant + mat" seçili',
+    body: 'Programın bantlı hareketler gösteriyor ama henüz bantla antrenman kaydın yok. Bantın yoksa "Ekipmansız"a geç; dambıl seti ve barfiks barı gelince "Dambıl"a geçersin.',
+    action: { label: 'Ekipmansıza geç', to: 'phase:bodyweight' },
+  };
+}
+
 function dumbbellTime({ workouts, settings, today }) {
   if (settings?.phase !== 'band') return null;
   const maxed = ['band_squat', 'band_glute_bridge'].filter((id) => {
@@ -413,7 +428,7 @@ function shoppingDay({ mealplan, shopping, today }) {
 
 export const RULES = [
   strengthThisWeek, longGap, lastWeek, proteinLow, sleepLow, weightRate, painRepeat, effortHard,
-  progression, weightsReady, dumbbellTime, weighIns, stepsLow, measurementsDue, testDue, blockDone, maintenanceSuggest,
+  progression, bandPhaseCheck, weightsReady, dumbbellTime, weighIns, stepsLow, measurementsDue, testDue, blockDone, maintenanceSuggest,
   checkinDue, shoppingDay, backupDue,
 ];
 
