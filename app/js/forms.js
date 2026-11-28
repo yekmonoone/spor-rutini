@@ -1,7 +1,7 @@
 // Kayıt formları (günlük, padel, ölçüm, güç testi) ve yedekleme akışları.
 import { state, saveDaily, deleteDaily, saveRecord, deleteRecord, dumpRaw, importBackup, updateMeta } from './store.js';
 import { h, openSheet, confirmSheet, toast, field, numInput, textInput, segmented, chips, checkbox } from './ui.js';
-import { dateKey, parseNum, uid, fmtDate, fmtNum } from './util.js';
+import { dateKey, parseNum, uid, fmtDate, fmtNum, addDays } from './util.js';
 import { PAIN_AREAS } from './rules.js';
 import { buildBackup, backupFileName, validateBackup, countRecords } from './backup.js';
 import { EX } from './exercises.js';
@@ -42,11 +42,19 @@ export function openDailyForm(date = dateKey()) {
   const note = textInput({ value: rec.note ?? '', placeholder: 'İsteğe bağlı not', multiline: true });
 
   let sheet;
-  dateIn.addEventListener('change', () => {
-    if (!dateIn.value) return;
+  const reopen = (d) => {
+    if (!d || d === date) return;
     sheet.close();
-    openDailyForm(dateIn.value);
-  });
+    openDailyForm(d);
+  };
+  dateIn.addEventListener('change', () => reopen(dateIn.value));
+  // Geçmiş güne hızlı geçiş: gece 00.00'dan sonra dünün adımını girmek için
+  const now = dateKey();
+  const quickDays = segmented([0, 1, 2].map((n) => {
+    const d = addDays(now, -n);
+    return { value: d, label: n === 0 ? 'Bugün' : n === 1 ? 'Dün' : fmtDate(d) };
+  }), date, reopen);
+  quickDays.classList.add('wrap');
 
   const save = async () => {
     try {
@@ -83,9 +91,10 @@ export function openDailyForm(date = dateKey()) {
   }
 
   sheet = openSheet({
-    title: 'Günlük kayıt',
+    title: date === now ? 'Günlük kayıt' : `Günlük kayıt · ${fmtDate(date)}`,
     content: h('div', { class: 'form' },
-      field('Tarih', dateIn),
+      h('div', { class: 'field' }, h('span', { class: 'label', text: 'Gün' }), quickDays),
+      field('Başka bir tarih', dateIn),
       h('div', { class: 'grid2' },
         field('Kilo (kg)', weight, 'Sabah, tuvaletten sonra, aç'),
         field('Adım', steps),

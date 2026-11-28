@@ -225,6 +225,32 @@ function eveningRow(t, r) {
         : null));
 }
 
+/** Gece 00.00'dan sonra (öğlene kadar) dünün adımı girilmediyse: dünü tamamla. */
+export function showYesterdayRow(daily, t, hour, sk) {
+  const y = addDays(t, -1);
+  return hour < 14 && (!sk || y >= sk) && daily[y]?.steps == null;
+}
+
+function yesterdayRow(t) {
+  const y = addDays(t, -1);
+  const r = state.daily[y] ?? {};
+  const steps = numInput({ value: r.steps, placeholder: 'adım', label: 'Dünün adımı' });
+  const save = async () => {
+    try {
+      const v = readNum(steps, 'Adım', 0, 100000, true);
+      if (v == null) { toast('Dünün adım sayısını yaz.'); return; }
+      await saveDaily(y, { steps: v });
+      toast('Dünün adımı kaydedildi ✓');
+    } catch (err) { toast(err.message); }
+  };
+  return row({ icon: '🌙', title: 'Dünü tamamla', time: 'dünün adımı' },
+    h('div', { class: 'inline-inputs' },
+      h('label', null, h('span', { class: 'muted small', text: 'adım' }), steps),
+      btn('Kaydet', save, 'small primary')),
+    h('div', { class: 'flow-actions' }, btn('Dünün diğer kayıtları', () => openDailyForm(y), 'small ghost')),
+    h('p', { class: 'muted small', text: 'Telefonun Sağlık uygulamasında dünün toplamına bak.' }));
+}
+
 function checkinRow(t) {
   const wk = checkinWeek(t);
   if (!wk) return null;
@@ -292,7 +318,9 @@ export function renderToday(root) {
   const focus = focusCard(state.meta, t);
   if (focus) root.append(focus);
 
-  const rows = [morningRow(t, r)];
+  const rows = [];
+  if (week > 0 && showYesterdayRow(state.daily, t, new Date().getHours(), sk)) rows.push(yesterdayRow(t));
+  rows.push(morningRow(t, r));
   if (mp?.days) {
     rows.push(mealRow(t, 'first', mp, mday, eaten, '🍽️', null));
   } else {
@@ -346,7 +374,7 @@ export function renderToday(root) {
     btn('+ Padel', () => openPadelForm(), 'small'),
     btn('+ Ölçüm', () => openMeasureForm(), 'small'),
     btn('🗓️ Haftalık', () => go('/haftalik'), 'small ghost'),
-    btn('+ Başka gün', () => openDailyForm(), 'small ghost'),
+    btn('📅 Geçmiş gün', () => openDailyForm(addDays(t, -1)), 'small ghost'),
     state.settings.aiEnabled ? btn('🤖 Asistan', () => go('/asistan'), 'small ghost') : null));
   root.append(h('p', { class: 'muted small center disclaimer', text: 'Bu uygulama genel bilgi verir, tıbbi tavsiye değildir. Ağrı veya sağlık şikâyetinde bir hekime danış.' }));
 }
